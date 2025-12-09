@@ -1,0 +1,969 @@
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+local RunService = game:GetService("RunService")
+
+local Icons = {
+    IconsType = "lucide",
+    Icons = {}
+}
+
+local success, lucideIcons = pcall(function()
+    return loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/Footagesus/Icons/refs/heads/main/lucide/dist/Icons.lua"))()
+end)
+
+if success and lucideIcons then
+    Icons.Icons["lucide"] = lucideIcons
+end
+
+function Icons.GetIcon(iconName)
+    local iconSet = Icons.Icons["lucide"]
+    if not iconSet then return nil end
+    
+    if iconSet.Icons and iconSet.Icons[iconName] then
+        local iconData = iconSet.Icons[iconName]
+        return {
+            Image = iconSet.Spritesheets and iconSet.Spritesheets[tostring(iconData.Image)] or iconData.Image,
+            ImageRectSize = iconData.ImageRectSize,
+            ImageRectOffset = iconData.ImageRectPosition
+        }
+    end
+    
+    if iconSet[iconName] then
+        if type(iconSet[iconName]) == "string" then
+            return {
+                Image = iconSet[iconName],
+                ImageRectSize = Vector2.new(0, 0),
+                ImageRectOffset = Vector2.new(0, 0)
+            }
+        end
+    end
+    
+    return nil
+end
+
+local CONFIG = {
+    TITLE = "ChronosHUB",
+    SUBTITLE = "Murder Mystery 2",
+    VERSION = "v1.0",
+    AUTHOR = "@wtfchronic",
+    
+    COLORS = {
+        PRIMARY = Color3.fromHex("#FFD700"),
+        SECONDARY = Color3.fromHex("#c0a763"),
+        
+        GRADIENT_START = Color3.fromHex("#640fc8"), 
+        GRADIENT_END = Color3.fromHex("#00262b"),
+        
+        CARD = Color3.fromHex("#1a1a1d"),
+        TEXT = Color3.fromHex("#FFFFFF"),
+        TEXT_DIM = Color3.fromHex("#888888"),
+        
+        SUCCESS = Color3.fromHex("#4ade80"),
+        ERROR = Color3.fromHex("#ef4444"),
+    },
+    
+    PARTICLES = {
+        MOON_SPAWN_MIN = 0.15,
+        MOON_SPAWN_MAX = 0.30,
+        STAR_SPAWN_MIN = 0.025,
+        STAR_SPAWN_MAX = 0.05,
+        BG_MOON_COUNT = 20,
+        BG_MOON_ROTATION_SPEED = 1.0,
+    },
+    
+    SCRIPT_URL = "https://github.com/OMchronicwtf/ChronosHUB-MM2/raw/refs/heads/main/ChronosHUB%201.0.lua"
+}
+
+local LoadingState = {
+    currentStatus = "Initializing...",
+    progress = 0,
+    isComplete = false,
+    isSuccess = false,
+    errorMessage = nil
+}
+
+local function Tween(instance, properties, duration, style, direction)
+    style = style or Enum.EasingStyle.Quint
+    direction = direction or Enum.EasingDirection.Out
+    local tween = TweenService:Create(
+        instance, 
+        TweenInfo.new(duration, style, direction), 
+        properties
+    )
+    tween:Play()
+    return tween
+end
+
+local function CreateCorner(parent, radius)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = radius or UDim.new(0, 12)
+    corner.Parent = parent
+    return corner
+end
+
+local function CreateStroke(parent, color, thickness, transparency)
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = color or CONFIG.COLORS.PRIMARY
+    stroke.Thickness = thickness or 1
+    stroke.Transparency = transparency or 0
+    stroke.Parent = parent
+    return stroke
+end
+
+local function ApplyIcon(imageLabel, iconName)
+    local iconData = Icons.GetIcon(iconName)
+    if iconData then
+        imageLabel.Image = iconData.Image
+        if iconData.ImageRectSize and iconData.ImageRectSize.X > 0 then
+            imageLabel.ImageRectSize = iconData.ImageRectSize
+            imageLabel.ImageRectOffset = iconData.ImageRectOffset
+        end
+        return true
+    end
+    return false
+end
+
+local LoaderGui = Instance.new("ScreenGui")
+LoaderGui.Name = "ChronosLoader_Premium"
+LoaderGui.Parent = CoreGui
+LoaderGui.IgnoreGuiInset = true
+LoaderGui.ResetOnSpawn = false
+LoaderGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+LoaderGui.DisplayOrder = 999
+
+local Background = Instance.new("Frame")
+Background.Name = "Background"
+Background.Size = UDim2.fromScale(1, 1)
+Background.BackgroundColor3 = CONFIG.COLORS.GRADIENT_START
+Background.BorderSizePixel = 0
+Background.BackgroundTransparency = 0
+Background.Parent = LoaderGui
+
+local GradientOverlay = Instance.new("Frame")
+GradientOverlay.Name = "GradientOverlay"
+GradientOverlay.Size = UDim2.fromScale(1, 1)
+GradientOverlay.BackgroundColor3 = CONFIG.COLORS.GRADIENT_END
+GradientOverlay.BorderSizePixel = 0
+GradientOverlay.BackgroundTransparency = 0
+GradientOverlay.Parent = Background
+
+local BGGradient = Instance.new("UIGradient")
+BGGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, CONFIG.COLORS.GRADIENT_START),
+    ColorSequenceKeypoint.new(1, CONFIG.COLORS.GRADIENT_END)
+})
+BGGradient.Rotation = 45
+BGGradient.Parent = GradientOverlay
+
+local Vignette = Instance.new("ImageLabel")
+Vignette.Name = "Vignette"
+Vignette.Size = UDim2.fromScale(1, 1)
+Vignette.BackgroundTransparency = 1
+Vignette.Image = "rbxassetid://1526405635"
+Vignette.ImageColor3 = Color3.new(0, 0, 0)
+Vignette.ImageTransparency = 0.2
+Vignette.ScaleType = Enum.ScaleType.Stretch
+Vignette.ZIndex = 2
+Vignette.Parent = Background
+
+local Scanlines = Instance.new("Frame")
+Scanlines.Name = "Scanlines"
+Scanlines.Size = UDim2.fromScale(1, 1)
+Scanlines.BackgroundTransparency = 1
+Scanlines.ZIndex = 3
+Scanlines.Parent = Background
+
+for i = 1, 80 do
+    local line = Instance.new("Frame")
+    line.Size = UDim2.new(1, 0, 0, 1)
+    line.Position = UDim2.fromScale(0, i / 80)
+    line.BackgroundColor3 = Color3.new(0, 0, 0)
+    line.BackgroundTransparency = 0.96
+    line.BorderSizePixel = 0
+    line.Parent = Scanlines
+end
+
+local ParticleContainer = Instance.new("Frame")
+ParticleContainer.Name = "ParticleContainer"
+ParticleContainer.Size = UDim2.fromScale(1, 1)
+ParticleContainer.BackgroundTransparency = 1
+ParticleContainer.ClipsDescendants = true
+ParticleContainer.ZIndex = 4
+ParticleContainer.Parent = Background
+
+local function CreateFloatingMoon()
+    local size = math.random(20, 45)
+    
+    local moonHolder = Instance.new("Frame")
+    moonHolder.Name = "FloatingMoon"
+    moonHolder.Size = UDim2.fromOffset(size, size)
+    moonHolder.Position = UDim2.fromScale(math.random() * 1, 1.1)
+    moonHolder.BackgroundTransparency = 1
+    moonHolder.BorderSizePixel = 0
+    moonHolder.ZIndex = 4
+    moonHolder.Rotation = math.random(-40, 40)
+    moonHolder.Parent = ParticleContainer
+    
+    local transparency = math.random(50, 75) / 100
+    
+    local moonIcon = Instance.new("ImageLabel")
+    moonIcon.Name = "MoonImg"
+    moonIcon.Size = UDim2.fromScale(1, 1)
+    moonIcon.BackgroundTransparency = 1
+    moonIcon.BorderSizePixel = 0
+    moonIcon.ImageColor3 = CONFIG.COLORS.PRIMARY
+    moonIcon.ImageTransparency = transparency
+    moonIcon.ScaleType = Enum.ScaleType.Fit
+    moonIcon.ZIndex = 4
+    moonIcon.Parent = moonHolder
+    
+    local usedIcon = ApplyIcon(moonIcon, "moon")
+    
+    if not usedIcon then
+        moonIcon:Destroy()
+        local mainCircle = Instance.new("Frame")
+        mainCircle.Size = UDim2.fromScale(1, 1)
+        mainCircle.BackgroundColor3 = CONFIG.COLORS.PRIMARY
+        mainCircle.BackgroundTransparency = transparency
+        mainCircle.BorderSizePixel = 0
+        mainCircle.ZIndex = 4
+        mainCircle.Parent = moonHolder
+        CreateCorner(mainCircle, UDim.new(1, 0))
+        
+        local cutout = Instance.new("Frame")
+        cutout.Size = UDim2.fromScale(0.8, 0.8)
+        cutout.Position = UDim2.fromScale(0.35, 0.1)
+        cutout.BackgroundColor3 = CONFIG.COLORS.GRADIENT_START 
+        cutout.BackgroundTransparency = transparency
+        cutout.BorderSizePixel = 0
+        cutout.ZIndex = 5
+        cutout.Parent = moonHolder
+        CreateCorner(cutout, UDim.new(1, 0))
+    end
+    
+    if math.random() > 0.5 then
+        local glow = Instance.new("ImageLabel")
+        glow.Size = UDim2.fromScale(2, 2)
+        glow.Position = UDim2.fromScale(0.5, 0.5)
+        glow.AnchorPoint = Vector2.new(0.5, 0.5)
+        glow.BackgroundTransparency = 1
+        glow.BorderSizePixel = 0
+        glow.Image = "rbxassetid://5028857084"
+        glow.ImageColor3 = CONFIG.COLORS.PRIMARY
+        glow.ImageTransparency = 0.85
+        glow.ZIndex = 3
+        glow.Parent = moonHolder
+    end
+    
+    local duration = math.random(10, 18)
+    local drift = (math.random() - 0.5) * 0.25
+    local rotationEnd = moonHolder.Rotation + math.random(-60, 60)
+    
+    Tween(moonHolder, {
+        Position = UDim2.fromScale(moonHolder.Position.X.Scale + drift, -0.15),
+        Rotation = rotationEnd
+    }, duration, Enum.EasingStyle.Linear)
+    
+    for _, child in ipairs(moonHolder:GetChildren()) do
+        if child:IsA("ImageLabel") then
+            Tween(child, {ImageTransparency = 1}, duration * 0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+        elseif child:IsA("Frame") then
+            Tween(child, {BackgroundTransparency = 1}, duration * 0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+        end
+    end
+    
+    task.delay(duration, function()
+        if moonHolder then moonHolder:Destroy() end
+    end)
+end
+
+local function CreateStarParticle()
+    local size = math.random(2, 5)
+    local particle = Instance.new("Frame")
+    particle.Size = UDim2.fromOffset(size, size)
+    particle.Position = UDim2.fromScale(math.random() * 1, 1.05)
+    particle.BackgroundColor3 = CONFIG.COLORS.PRIMARY
+    particle.BackgroundTransparency = math.random(65, 85) / 100
+    particle.BorderSizePixel = 0
+    particle.ZIndex = 4
+    particle.Parent = ParticleContainer
+    CreateCorner(particle, UDim.new(1, 0))
+    
+    local duration = math.random(7, 14)
+    local drift = (math.random() - 0.5) * 0.35
+    
+    Tween(particle, {
+        Position = UDim2.fromScale(particle.Position.X.Scale + drift, -0.1),
+        BackgroundTransparency = 1
+    }, duration, Enum.EasingStyle.Linear)
+    
+    task.delay(duration, function()
+        if particle then particle:Destroy() end
+    end)
+end
+
+local MoonBackgroundContainer = Instance.new("Frame")
+MoonBackgroundContainer.Name = "MoonBackgroundContainer"
+MoonBackgroundContainer.Size = UDim2.fromScale(1, 1)
+MoonBackgroundContainer.BackgroundTransparency = 1
+MoonBackgroundContainer.BorderSizePixel = 0
+MoonBackgroundContainer.ZIndex = 1
+MoonBackgroundContainer.Parent = Background
+
+local bgMoons = {}
+for i = 1, CONFIG.PARTICLES.BG_MOON_COUNT do
+    local size = math.random(60, 140)
+    local transparency = math.random(90, 96) / 100
+    
+    local moonBG = Instance.new("Frame")
+    moonBG.Name = "BGMoon" .. i
+    moonBG.Size = UDim2.fromOffset(size, size)
+    moonBG.Position = UDim2.fromScale(math.random() * 1.1 - 0.05, math.random() * 1.1 - 0.05)
+    moonBG.BackgroundTransparency = 1
+    moonBG.BorderSizePixel = 0
+    moonBG.Rotation = math.random(0, 360)
+    moonBG.ZIndex = 1
+    moonBG.Parent = MoonBackgroundContainer
+    
+    local moonIcon = Instance.new("ImageLabel")
+    moonIcon.Name = "MoonImg"
+    moonIcon.Size = UDim2.fromScale(1, 1)
+    moonIcon.BackgroundTransparency = 1
+    moonIcon.BorderSizePixel = 0
+    moonIcon.ImageColor3 = CONFIG.COLORS.PRIMARY
+    moonIcon.ImageTransparency = transparency
+    moonIcon.ScaleType = Enum.ScaleType.Fit
+    moonIcon.ZIndex = 1
+    moonIcon.Parent = moonBG
+    
+    local usedIcon = ApplyIcon(moonIcon, "moon")
+    
+    if not usedIcon then
+        moonIcon:Destroy()
+        local mainC = Instance.new("Frame")
+        mainC.Size = UDim2.fromScale(1, 1)
+        mainC.BackgroundColor3 = CONFIG.COLORS.PRIMARY
+        mainC.BackgroundTransparency = transparency
+        mainC.BorderSizePixel = 0
+        mainC.ZIndex = 1
+        mainC.Parent = moonBG
+        CreateCorner(mainC, UDim.new(1, 0))
+        
+        local cutC = Instance.new("Frame")
+        cutC.Size = UDim2.fromScale(0.8, 0.8)
+        cutC.Position = UDim2.fromScale(0.35, 0.1)
+        cutC.BackgroundColor3 = CONFIG.COLORS.GRADIENT_START
+        cutC.BackgroundTransparency = transparency
+        cutC.BorderSizePixel = 0
+        cutC.ZIndex = 2
+        cutC.Parent = moonBG
+        CreateCorner(cutC, UDim.new(1, 0))
+    end
+    
+    bgMoons[i] = moonBG
+    
+    task.spawn(function()
+        local speed = (math.random() - 0.5) * 0.06 * CONFIG.PARTICLES.BG_MOON_ROTATION_SPEED
+        while moonBG.Parent and LoaderGui.Parent do
+            moonBG.Rotation = moonBG.Rotation + speed
+            task.wait(0.03)
+        end
+    end)
+end
+
+local CardContainer = Instance.new("Frame")
+CardContainer.Name = "CardContainer"
+CardContainer.Size = UDim2.fromOffset(420, 320)
+CardContainer.Position = UDim2.fromScale(0.5, 0.5)
+CardContainer.AnchorPoint = Vector2.new(0.5, 0.5)
+CardContainer.BackgroundTransparency = 1
+CardContainer.ZIndex = 10
+CardContainer.Parent = Background
+
+local ShadowLayers = {}
+
+local CardShadow1 = Instance.new("Frame")
+CardShadow1.Name = "CardShadow1"
+CardShadow1.Size = UDim2.new(1, 60, 1, 60)
+CardShadow1.Position = UDim2.fromScale(0.5, 0.52)
+CardShadow1.AnchorPoint = Vector2.new(0.5, 0.5)
+CardShadow1.BackgroundColor3 = Color3.new(0, 0, 0)
+CardShadow1.BackgroundTransparency = 0.85
+CardShadow1.BorderSizePixel = 0
+CardShadow1.ZIndex = 7
+CardShadow1.Parent = CardContainer
+CreateCorner(CardShadow1, UDim.new(0, 30))
+table.insert(ShadowLayers, CardShadow1)
+
+local CardShadow2 = Instance.new("Frame")
+CardShadow2.Name = "CardShadow2"
+CardShadow2.Size = UDim2.new(1, 40, 1, 40)
+CardShadow2.Position = UDim2.fromScale(0.5, 0.51)
+CardShadow2.AnchorPoint = Vector2.new(0.5, 0.5)
+CardShadow2.BackgroundColor3 = Color3.new(0, 0, 0)
+CardShadow2.BackgroundTransparency = 0.75
+CardShadow2.BorderSizePixel = 0
+CardShadow2.ZIndex = 8
+CardShadow2.Parent = CardContainer
+CreateCorner(CardShadow2, UDim.new(0, 28))
+table.insert(ShadowLayers, CardShadow2)
+
+local CardShadow3 = Instance.new("Frame")
+CardShadow3.Name = "CardShadow3"
+CardShadow3.Size = UDim2.new(1, 20, 1, 20)
+CardShadow3.Position = UDim2.fromScale(0.5, 0.505)
+CardShadow3.AnchorPoint = Vector2.new(0.5, 0.5)
+CardShadow3.BackgroundColor3 = Color3.new(0, 0, 0)
+CardShadow3.BackgroundTransparency = 0.65
+CardShadow3.BorderSizePixel = 0
+CardShadow3.ZIndex = 9
+CardShadow3.Parent = CardContainer
+CreateCorner(CardShadow3, UDim.new(0, 26))
+table.insert(ShadowLayers, CardShadow3)
+
+local Card = Instance.new("Frame")
+Card.Name = "Card"
+Card.Size = UDim2.fromScale(1, 1)
+Card.Position = UDim2.fromScale(0.5, 0.5)
+Card.AnchorPoint = Vector2.new(0.5, 0.5)
+Card.BackgroundColor3 = CONFIG.COLORS.CARD
+Card.BackgroundTransparency = 0.05
+Card.BorderSizePixel = 0
+Card.ZIndex = 10
+Card.Parent = CardContainer
+
+CreateCorner(Card, UDim.new(0, 24))
+
+local CardBorder = CreateStroke(Card, CONFIG.COLORS.PRIMARY, 2, 0.5)
+CardBorder.Name = "CardBorder"
+
+local LogoContainer = Instance.new("Frame")
+LogoContainer.Name = "LogoContainer"
+LogoContainer.Size = UDim2.fromOffset(90, 90)
+LogoContainer.Position = UDim2.new(0.5, 0, 0, 40)
+LogoContainer.AnchorPoint = Vector2.new(0.5, 0)
+LogoContainer.BackgroundTransparency = 1
+LogoContainer.ZIndex = 11
+LogoContainer.Parent = Card
+
+local OuterGlow = Instance.new("Frame")
+OuterGlow.Name = "OuterGlow"
+OuterGlow.Size = UDim2.fromOffset(95, 95)
+OuterGlow.Position = UDim2.fromScale(0.5, 0.5)
+OuterGlow.AnchorPoint = Vector2.new(0.5, 0.5)
+OuterGlow.BackgroundColor3 = CONFIG.COLORS.PRIMARY
+OuterGlow.BackgroundTransparency = 0.9
+OuterGlow.BorderSizePixel = 0
+OuterGlow.ZIndex = 10
+OuterGlow.Parent = LogoContainer
+CreateCorner(OuterGlow, UDim.new(1, 0))
+
+local LogoRing = Instance.new("Frame")
+LogoRing.Name = "LogoRing"
+LogoRing.Size = UDim2.fromOffset(80, 80)
+LogoRing.Position = UDim2.fromScale(0.5, 0.5)
+LogoRing.AnchorPoint = Vector2.new(0.5, 0.5)
+LogoRing.BackgroundColor3 = Color3.fromHex("#15151f")
+LogoRing.BackgroundTransparency = 0.3
+LogoRing.BorderSizePixel = 0
+LogoRing.ZIndex = 11
+LogoRing.Parent = LogoContainer
+CreateCorner(LogoRing, UDim.new(1, 0))
+
+local LogoRingBorder = CreateStroke(LogoRing, CONFIG.COLORS.PRIMARY, 2.5, 0.2)
+
+local MoonLogoContainer = Instance.new("Frame")
+MoonLogoContainer.Name = "MoonLogoContainer"
+MoonLogoContainer.Size = UDim2.fromOffset(40, 40)
+MoonLogoContainer.Position = UDim2.fromScale(0.5, 0.5)
+MoonLogoContainer.AnchorPoint = Vector2.new(0.5, 0.5)
+MoonLogoContainer.BackgroundTransparency = 1
+MoonLogoContainer.ZIndex = 12
+MoonLogoContainer.Parent = LogoRing
+
+local MoonLogoIcon = Instance.new("ImageLabel")
+MoonLogoIcon.Name = "MoonLogoIcon"
+MoonLogoIcon.Size = UDim2.fromScale(1, 1)
+MoonLogoIcon.BackgroundTransparency = 1
+MoonLogoIcon.BorderSizePixel = 0
+MoonLogoIcon.ImageColor3 = CONFIG.COLORS.PRIMARY
+MoonLogoIcon.ImageTransparency = 0
+MoonLogoIcon.ScaleType = Enum.ScaleType.Fit
+MoonLogoIcon.ZIndex = 12
+MoonLogoIcon.Parent = MoonLogoContainer
+
+local usedLogoIcon = ApplyIcon(MoonLogoIcon, "moon")
+
+local MoonMain, MoonCutout
+if not usedLogoIcon then
+    MoonLogoIcon:Destroy()
+    
+    MoonMain = Instance.new("Frame")
+    MoonMain.Name = "MoonMain"
+    MoonMain.Size = UDim2.fromScale(1, 1)
+    MoonMain.BackgroundColor3 = CONFIG.COLORS.PRIMARY
+    MoonMain.BackgroundTransparency = 0
+    MoonMain.BorderSizePixel = 0
+    MoonMain.ZIndex = 12
+    MoonMain.Parent = MoonLogoContainer
+    CreateCorner(MoonMain, UDim.new(1, 0))
+    
+    MoonCutout = Instance.new("Frame")
+    MoonCutout.Name = "MoonCutout"
+    MoonCutout.Size = UDim2.fromScale(0.75, 0.75)
+    MoonCutout.Position = UDim2.fromScale(0.4, 0.12)
+    MoonCutout.BackgroundColor3 = Color3.fromHex("#15151f")
+    MoonCutout.BackgroundTransparency = 0
+    MoonCutout.BorderSizePixel = 0
+    MoonCutout.ZIndex = 13
+    MoonCutout.Parent = MoonLogoContainer
+    CreateCorner(MoonCutout, UDim.new(1, 0))
+    
+    MoonLogoContainer.Rotation = -25
+end
+
+local DecoDots = {}
+for i = 1, 8 do
+    local angle = math.rad((i - 1) * 45 - 90)
+    local radius = 52
+    local dotSize = 4
+    
+    local dot = Instance.new("Frame")
+    dot.Name = "DecoDot" .. i
+    dot.Size = UDim2.fromOffset(dotSize, dotSize)
+    dot.Position = UDim2.new(
+        0.5, math.cos(angle) * radius - dotSize/2,
+        0.5, math.sin(angle) * radius - dotSize/2
+    )
+    dot.BackgroundColor3 = CONFIG.COLORS.PRIMARY
+    dot.BackgroundTransparency = 0.5
+    dot.BorderSizePixel = 0
+    dot.ZIndex = 10
+    dot.Parent = LogoContainer
+    CreateCorner(dot, UDim.new(1, 0))
+    DecoDots[i] = dot
+end
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Name = "TitleLabel"
+TitleLabel.Size = UDim2.new(1, 0, 0, 40)
+TitleLabel.Position = UDim2.new(0, 0, 0, 140)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = CONFIG.TITLE
+TitleLabel.TextColor3 = CONFIG.COLORS.TEXT
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.TextSize = 36
+TitleLabel.ZIndex = 11
+TitleLabel.Parent = Card
+
+local TitleGradient = Instance.new("UIGradient")
+TitleGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromHex("#FFFFFF")),
+    ColorSequenceKeypoint.new(0.4, CONFIG.COLORS.PRIMARY),
+    ColorSequenceKeypoint.new(0.6, CONFIG.COLORS.PRIMARY),
+    ColorSequenceKeypoint.new(1, Color3.fromHex("#FFFFFF"))
+})
+TitleGradient.Parent = TitleLabel
+
+local SubtitleLabel = Instance.new("TextLabel")
+SubtitleLabel.Name = "SubtitleLabel"
+SubtitleLabel.Size = UDim2.new(1, 0, 0, 20)
+SubtitleLabel.Position = UDim2.new(0, 0, 0, 178)
+SubtitleLabel.BackgroundTransparency = 1
+SubtitleLabel.Text = CONFIG.SUBTITLE
+SubtitleLabel.TextColor3 = CONFIG.COLORS.TEXT_DIM
+SubtitleLabel.Font = Enum.Font.GothamMedium
+SubtitleLabel.TextSize = 14
+SubtitleLabel.ZIndex = 11
+SubtitleLabel.Parent = Card
+
+local ProgressFrame = Instance.new("Frame")
+ProgressFrame.Name = "ProgressFrame"
+ProgressFrame.Size = UDim2.new(0.7, 0, 0, 6)
+ProgressFrame.Position = UDim2.new(0.5, 0, 0, 212)
+ProgressFrame.AnchorPoint = Vector2.new(0.5, 0)
+ProgressFrame.BackgroundColor3 = Color3.fromHex("#1a1a25")
+ProgressFrame.BorderSizePixel = 0
+ProgressFrame.ZIndex = 11
+ProgressFrame.Parent = Card
+
+CreateCorner(ProgressFrame, UDim.new(1, 0))
+local ProgressStroke = CreateStroke(ProgressFrame, CONFIG.COLORS.PRIMARY, 1, 0.85)
+
+local ProgressFill = Instance.new("Frame")
+ProgressFill.Name = "ProgressFill"
+ProgressFill.Size = UDim2.fromScale(0, 1)
+ProgressFill.BackgroundColor3 = CONFIG.COLORS.PRIMARY
+ProgressFill.BorderSizePixel = 0
+ProgressFill.ZIndex = 12
+ProgressFill.ClipsDescendants = true
+ProgressFill.Parent = ProgressFrame
+
+CreateCorner(ProgressFill, UDim.new(1, 0))
+
+local ProgressGlow = Instance.new("UIGradient")
+ProgressGlow.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, CONFIG.COLORS.SECONDARY),
+    ColorSequenceKeypoint.new(0.5, CONFIG.COLORS.PRIMARY),
+    ColorSequenceKeypoint.new(1, Color3.fromHex("#FFF8DC"))
+})
+ProgressGlow.Parent = ProgressFill
+
+local ProgressShine = Instance.new("Frame")
+ProgressShine.Size = UDim2.fromScale(0.25, 1)
+ProgressShine.Position = UDim2.fromScale(-0.25, 0)
+ProgressShine.BackgroundColor3 = Color3.new(1, 1, 1)
+ProgressShine.BackgroundTransparency = 0.6
+ProgressShine.BorderSizePixel = 0
+ProgressShine.ZIndex = 13
+ProgressShine.Parent = ProgressFill
+CreateCorner(ProgressShine, UDim.new(1, 0))
+
+local ShineGradient = Instance.new("UIGradient")
+ShineGradient.Transparency = NumberSequence.new({
+    NumberSequenceKeypoint.new(0, 1),
+    NumberSequenceKeypoint.new(0.5, 0.4),
+    NumberSequenceKeypoint.new(1, 1)
+})
+ShineGradient.Parent = ProgressShine
+
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Name = "StatusLabel"
+StatusLabel.Size = UDim2.new(1, 0, 0, 20)
+StatusLabel.Position = UDim2.new(0, 0, 0, 228)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Text = "Initializing..."
+StatusLabel.TextColor3 = CONFIG.COLORS.SECONDARY
+StatusLabel.Font = Enum.Font.GothamMedium
+StatusLabel.TextSize = 13
+StatusLabel.ZIndex = 11
+StatusLabel.Parent = Card
+
+local SpinnerContainer = Instance.new("Frame")
+SpinnerContainer.Name = "SpinnerContainer"
+SpinnerContainer.Size = UDim2.fromOffset(44, 44)
+SpinnerContainer.Position = UDim2.new(0.5, 0, 0, 255)
+SpinnerContainer.AnchorPoint = Vector2.new(0.5, 0)
+SpinnerContainer.BackgroundTransparency = 1
+SpinnerContainer.ZIndex = 11
+SpinnerContainer.Parent = Card
+
+local numSpinnerDots = 8
+local spinnerDots = {}
+for i = 1, numSpinnerDots do
+    local angle = math.rad((i - 1) * (360 / numSpinnerDots) - 90)
+    local radius = 18
+    local dotSize = 5
+    
+    local dot = Instance.new("Frame")
+    dot.Name = "SpinDot" .. i
+    dot.Size = UDim2.fromOffset(dotSize, dotSize)
+    dot.Position = UDim2.new(
+        0.5, math.cos(angle) * radius - dotSize/2,
+        0.5, math.sin(angle) * radius - dotSize/2
+    )
+    dot.BackgroundColor3 = CONFIG.COLORS.PRIMARY
+    dot.BackgroundTransparency = (i - 1) / numSpinnerDots * 0.9
+    dot.BorderSizePixel = 0
+    dot.ZIndex = 12
+    dot.Parent = SpinnerContainer
+    CreateCorner(dot, UDim.new(1, 0))
+    
+    spinnerDots[i] = dot
+end
+
+local VersionLabel = Instance.new("TextLabel")
+VersionLabel.Name = "VersionLabel"
+VersionLabel.Size = UDim2.new(1, 0, 0, 15)
+VersionLabel.Position = UDim2.new(0, 0, 1, -18)
+VersionLabel.BackgroundTransparency = 1
+VersionLabel.Text = CONFIG.VERSION .. " | " .. CONFIG.AUTHOR
+VersionLabel.TextColor3 = Color3.fromHex("#3a3a3a")
+VersionLabel.Font = Enum.Font.Gotham
+VersionLabel.TextSize = 10
+VersionLabel.ZIndex = 11
+VersionLabel.Parent = Card
+
+for _, shadow in ipairs(ShadowLayers) do
+    shadow.BackgroundTransparency = 1
+end
+
+CardContainer.Position = UDim2.fromScale(0.5, 0.55)
+Card.BackgroundTransparency = 1
+CardBorder.Transparency = 1
+LogoRing.BackgroundTransparency = 1
+LogoRingBorder.Transparency = 1
+OuterGlow.BackgroundTransparency = 1
+TitleLabel.TextTransparency = 1
+SubtitleLabel.TextTransparency = 1
+ProgressFrame.BackgroundTransparency = 1
+ProgressStroke.Transparency = 1
+StatusLabel.TextTransparency = 1
+VersionLabel.TextTransparency = 1
+
+if usedLogoIcon then
+    MoonLogoIcon.ImageTransparency = 1
+else
+    if MoonMain then MoonMain.BackgroundTransparency = 1 end
+    if MoonCutout then MoonCutout.BackgroundTransparency = 1 end
+end
+
+for _, dot in ipairs(DecoDots) do
+    dot.BackgroundTransparency = 1
+end
+
+for _, dot in ipairs(spinnerDots) do
+    dot.BackgroundTransparency = 1
+end
+
+task.spawn(function()
+    local rotation = 45
+    while LoaderGui.Parent do
+        rotation = (rotation + 0.1) % 360
+        BGGradient.Rotation = rotation
+        task.wait(0.03)
+    end
+end)
+
+task.spawn(function()
+    while LoaderGui.Parent do
+        CreateFloatingMoon()
+        task.wait(math.random(CONFIG.PARTICLES.MOON_SPAWN_MIN * 100, CONFIG.PARTICLES.MOON_SPAWN_MAX * 100) / 100)
+    end
+end)
+
+task.spawn(function()
+    while LoaderGui.Parent do
+        CreateStarParticle()
+        task.wait(math.random(CONFIG.PARTICLES.STAR_SPAWN_MIN * 100, CONFIG.PARTICLES.STAR_SPAWN_MAX * 100) / 100)
+    end
+end)
+
+task.spawn(function()
+    while LoaderGui.Parent do
+        SpinnerContainer.Rotation = SpinnerContainer.Rotation + 6
+        task.wait(0.025)
+    end
+end)
+
+task.spawn(function()
+    while LoaderGui.Parent do
+        Tween(LogoContainer, {Position = UDim2.new(0.5, 0, 0, 38)}, 2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+        task.wait(2)
+        Tween(LogoContainer, {Position = UDim2.new(0.5, 0, 0, 42)}, 2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+        task.wait(2)
+    end
+end)
+
+task.spawn(function()
+    while LoaderGui.Parent do
+        Tween(MoonLogoContainer, {Size = UDim2.fromOffset(43, 43)}, 1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+        task.wait(1.2)
+        Tween(MoonLogoContainer, {Size = UDim2.fromOffset(38, 38)}, 1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+        task.wait(1.2)
+    end
+end)
+
+task.spawn(function()
+    local offset = 0
+    while LoaderGui.Parent do
+        offset = (offset + 0.006) % 1
+        TitleGradient.Offset = Vector2.new(offset - 0.5, 0)
+        task.wait(0.03)
+    end
+end)
+
+task.spawn(function()
+    while LoaderGui.Parent do
+        ProgressShine.Position = UDim2.fromScale(-0.25, 0)
+        Tween(ProgressShine, {Position = UDim2.fromScale(1.25, 0)}, 1.5, Enum.EasingStyle.Linear)
+        task.wait(2.2)
+    end
+end)
+
+task.spawn(function()
+    while LoaderGui.Parent do
+        Tween(CardBorder, {Transparency = 0.65}, 1.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+        task.wait(1.8)
+        Tween(CardBorder, {Transparency = 0.3}, 1.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+        task.wait(1.8)
+    end
+end)
+
+task.spawn(function()
+    while LoaderGui.Parent do
+        Tween(OuterGlow, {BackgroundTransparency = 0.85}, 1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+        task.wait(1.5)
+        Tween(OuterGlow, {BackgroundTransparency = 0.95}, 1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+        task.wait(1.5)
+    end
+end)
+
+task.spawn(function()
+    while LoaderGui.Parent do
+        for i, dot in ipairs(DecoDots) do
+            task.delay(i * 0.08, function()
+                Tween(dot, {BackgroundTransparency = 0.3}, 0.4)
+                task.wait(0.4)
+                Tween(dot, {BackgroundTransparency = 0.7}, 0.4)
+            end)
+        end
+        task.wait(1.5)
+    end
+end)
+
+local function RemoveLoader(success)
+    local successText = success and "Launch Successful!" or "Failed to Load"
+    local color = success and CONFIG.COLORS.SUCCESS or CONFIG.COLORS.ERROR
+    
+    StatusLabel.Text = successText
+    StatusLabel.TextColor3 = color
+    if success then
+        Tween(ProgressFill, {Size = UDim2.fromScale(1, 1)}, 0.3)
+    end
+    
+    task.wait(0.5)
+    
+    local fadeTime = 0.4
+    
+    Tween(CardContainer, {Position = UDim2.fromScale(0.5, 0.45)}, 0.5, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+    Tween(Card, {BackgroundTransparency = 1}, fadeTime)
+
+    for _, shadow in ipairs(ShadowLayers) do
+        Tween(shadow, {BackgroundTransparency = 1}, fadeTime)
+    end
+    
+    Tween(CardBorder, {Transparency = 1}, fadeTime)
+    Tween(LogoRing, {BackgroundTransparency = 1}, fadeTime)
+    Tween(LogoRingBorder, {Transparency = 1}, fadeTime)
+    Tween(OuterGlow, {BackgroundTransparency = 1}, fadeTime)
+    
+    if usedLogoIcon then
+        Tween(MoonLogoIcon, {ImageTransparency = 1}, fadeTime)
+    else
+        if MoonMain then Tween(MoonMain, {BackgroundTransparency = 1}, fadeTime) end
+        if MoonCutout then Tween(MoonCutout, {BackgroundTransparency = 1}, fadeTime) end
+    end
+    
+    Tween(TitleLabel, {TextTransparency = 1}, fadeTime)
+    Tween(SubtitleLabel, {TextTransparency = 1}, fadeTime)
+    Tween(StatusLabel, {TextTransparency = 1}, fadeTime)
+    Tween(VersionLabel, {TextTransparency = 1}, fadeTime)
+    Tween(ProgressFrame, {BackgroundTransparency = 1}, fadeTime)
+    Tween(ProgressFill, {BackgroundTransparency = 1}, fadeTime)
+    Tween(ProgressStroke, {Transparency = 1}, fadeTime)
+    
+    for _, dot in ipairs(DecoDots) do
+        Tween(dot, {BackgroundTransparency = 1}, fadeTime)
+    end
+    
+    for _, dot in ipairs(spinnerDots) do
+        Tween(dot, {BackgroundTransparency = 1}, fadeTime)
+    end
+    
+    task.wait(fadeTime)
+    
+    Tween(GradientOverlay, {BackgroundTransparency = 1}, 0.5)
+    Tween(Background, {BackgroundTransparency = 1}, 0.5)
+    Tween(Vignette, {ImageTransparency = 1}, 0.5)
+    
+    for _, moonBG in ipairs(bgMoons) do
+        for _, child in ipairs(moonBG:GetChildren()) do
+            if child:IsA("ImageLabel") then
+                Tween(child, {ImageTransparency = 1}, 0.4)
+            elseif child:IsA("Frame") then
+                Tween(child, {BackgroundTransparency = 1}, 0.4)
+            end
+        end
+    end
+    
+    task.wait(0.6)
+    LoaderGui:Destroy()
+end
+
+task.spawn(function()
+    Tween(CardContainer, {Position = UDim2.fromScale(0.5, 0.5)}, 1, Enum.EasingStyle.Back)
+    Tween(Card, {BackgroundTransparency = 0.03}, 0.8)
+
+    for i, shadow in ipairs(ShadowLayers) do
+        local targetTransparency = shadow.Name == "CardShadow1" and 0.85 or (shadow.Name == "CardShadow2" and 0.75 or 0.65)
+        task.delay(i * 0.05, function()
+            Tween(shadow, {BackgroundTransparency = targetTransparency}, 0.8)
+        end)
+    end
+    
+    Tween(CardBorder, {Transparency = 0.45}, 0.8)
+    
+    task.wait(0.1)
+    Tween(LogoRing, {BackgroundTransparency = 0.3}, 0.5)
+    Tween(LogoRingBorder, {Transparency = 0.2}, 0.5)
+    Tween(OuterGlow, {BackgroundTransparency = 0.9}, 0.5)
+    
+    if usedLogoIcon then
+        Tween(MoonLogoIcon, {ImageTransparency = 0}, 0.6)
+    else
+        if MoonMain then Tween(MoonMain, {BackgroundTransparency = 0}, 0.6) end
+        if MoonCutout then Tween(MoonCutout, {BackgroundTransparency = 0}, 0.6) end
+    end
+    
+    for i, dot in ipairs(DecoDots) do
+        task.delay(i * 0.05, function()
+            Tween(dot, {BackgroundTransparency = 0.5}, 0.4)
+        end)
+    end
+    
+    task.wait(0.2)
+    Tween(TitleLabel, {TextTransparency = 0}, 0.6)
+    Tween(SubtitleLabel, {TextTransparency = 0}, 0.5)
+    Tween(ProgressFrame, {BackgroundTransparency = 0}, 0.5)
+    Tween(ProgressStroke, {Transparency = 0.85}, 0.5)
+    Tween(StatusLabel, {TextTransparency = 0}, 0.5)
+    
+    for i, dot in ipairs(spinnerDots) do
+        task.delay(i * 0.04, function()
+            local targetTransparency = (i - 1) / #spinnerDots * 0.9
+            Tween(dot, {BackgroundTransparency = targetTransparency}, 0.35)
+        end)
+    end
+    
+    Tween(VersionLabel, {TextTransparency = 0}, 0.5)
+    
+    task.wait(0.5) 
+    
+    LoadingState.currentStatus = "Connecting..."
+    Tween(ProgressFill, {Size = UDim2.fromScale(0.3, 1)}, 0.5)
+    
+    local scriptContent = nil
+    local fetchSuccess, fetchError = pcall(function()
+        scriptContent = game:HttpGet(CONFIG.SCRIPT_URL)
+    end)
+    
+    if not fetchSuccess or not scriptContent then
+        LoadingState.currentStatus = "Connection Failed"
+        RemoveLoader(false)
+        warn("Loader Error:", fetchError)
+        return
+    end
+    
+    LoadingState.currentStatus = "Executing..."
+    Tween(ProgressFill, {Size = UDim2.fromScale(0.8, 1)}, 0.3)
+    
+    local compiledFunc, compileError = loadstring(scriptContent)
+    
+    if not compiledFunc then
+        LoadingState.currentStatus = "Compile Error"
+        RemoveLoader(false)
+        warn("Loader Compile Error:", compileError)
+        return
+    end
+    
+    local executeSuccess, executeError = pcall(compiledFunc)
+    
+    if executeSuccess then
+        RemoveLoader(true)
+    else
+        LoadingState.currentStatus = "Runtime Error"
+        RemoveLoader(false)
+        warn("Loader Runtime Error:", executeError)
+    end
+end)
