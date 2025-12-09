@@ -492,7 +492,7 @@ MoonLogoIcon.ScaleType = Enum.ScaleType.Fit
 MoonLogoIcon.ZIndex = 12
 MoonLogoIcon.Parent = MoonLogoContainer
 
-local usedLogoIcon = ApplyIcon(MoonLogoIcon, "moon")
+local usedLogoIcon = ApplyIcon(MoonLogoIcon, "moon-star")
 
 local MoonMain, MoonCutout
 if not usedLogoIcon then
