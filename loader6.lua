@@ -1,6 +1,50 @@
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local RbxAnalyticsService = game:GetService("RbxAnalyticsService")
+
+local JUNKIE_CONFIG = {
+    API_KEY = "cc8dca0c-8fcf-45b7-8da3-0e6609411b11",
+    SERVICE_ID = "ChronosHUB",
+    PROVIDER = "ChronosHUB Keys",
+    ENABLE_HWID_CHECK = true,
+    ENABLE_KEYLESS_CHECK = true,
+}
+
+local ScriptToRun = nil
+local JunkieSDK = nil
+local JunkieLoaded = false
+local isMinimized = false
+
+local function LoadJunkieSDK()
+    local success, result = pcall(function()
+        return loadstring(game:HttpGet("https://junkie-development.de/sdk/JunkieKeySystem.lua"))()
+    end)
+    
+    if success and result then
+        JunkieSDK = result
+        JunkieLoaded = true
+        return true
+    else
+        return false
+    end
+end
+
+local function GetHWID()
+    local hwid = nil
+    pcall(function()
+        if gethwid then
+            hwid = gethwid()
+        elseif getexecutorname and identifyexecutor then
+            hwid = game:GetService("RbxAnalyticsService"):GetClientId()
+        else
+            hwid = game:GetService("RbxAnalyticsService"):GetClientId()
+        end
+    end)
+    return hwid or "UNKNOWN"
+end
 
 local Icons = {
     IconsType = "lucide",
@@ -41,55 +85,65 @@ function Icons.GetIcon(iconName)
     return nil
 end
 
+local function ApplyIcon(imageLabel, iconName)
+    local iconData = Icons.GetIcon(iconName)
+    if iconData then
+        imageLabel.Image = iconData.Image
+        if iconData.ImageRectSize and iconData.ImageRectSize.X > 0 then
+            imageLabel.ImageRectSize = iconData.ImageRectSize
+            imageLabel.ImageRectOffset = iconData.ImageRectOffset
+        end
+        return true
+    end
+    return false
+end
+
 local CONFIG = {
-    TITLE = "ChronosHUB",
-    SUBTITLE = "Murder Mystery 2",
-    VERSION = "v1.0",
-    AUTHOR = "@wtfchronic",
+    TITLE = "ChronosHUB Key System",
+    SUBTITLE = "Secure Authentication",
+    VERSION = "©2025",
+    AUTHOR = "Junkie-Developments. All rights reserved",
+    SCRIPT_URL = "https://github.com/OMchronicwtf/ChronosHUB-MM2/raw/refs/heads/main/Loader",
     
     COLORS = {
         PRIMARY = Color3.fromHex("#FFD700"),
-        SECONDARY = Color3.fromHex("#c0a763"),
-        
-        GRADIENT_START = Color3.fromHex("#640fc8"), 
-        GRADIENT_END = Color3.fromHex("#00262b"),
-        
-        CARD = Color3.fromHex("#1a1a1d"),
+        SECONDARY = Color3.fromHex("#C0A763"),
+        ACCENT = Color3.fromHex("#E3C56D"),
+
+        GRADIENT_START = Color3.fromHex("#0A0A0F"),
+        GRADIENT_END = Color3.fromHex("#1A0533"),
+
+        CARD = Color3.fromHex("#0D0D12"),
+        CARD_LIGHT = Color3.fromHex("#14141B"),
+
+        INPUT_BG = Color3.fromHex("#0A0A0F"),
+        BUTTON_SECONDARY = Color3.fromHex("#1A1A24"),
+
         TEXT = Color3.fromHex("#FFFFFF"),
         TEXT_DIM = Color3.fromHex("#888888"),
-        
-        SUCCESS = Color3.fromHex("#4ade80"),
-        ERROR = Color3.fromHex("#ef4444"),
+        TEXT_MUTED = Color3.fromHex("#666666"),
+
+        SUCCESS = Color3.fromHex("#4ADE80"),
+        ERROR = Color3.fromHex("#EF4444"),
+        WARNING = Color3.fromHex("#FBBF24"),
+
+        PREMIUM = Color3.fromHex("#FFD700"),
     },
     
     PARTICLES = {
-        MOON_SPAWN_MIN = 0.15,
-        MOON_SPAWN_MAX = 0.30,
-        STAR_SPAWN_MIN = 0.025,
-        STAR_SPAWN_MAX = 0.05,
-        BG_MOON_COUNT = 20,
-        BG_MOON_ROTATION_SPEED = 1.0,
+        STAR_SPAWN_MIN = 0.08,
+        STAR_SPAWN_MAX = 0.15,
+        CRYSTAL_SPAWN_MIN = 0.2,
+        CRYSTAL_SPAWN_MAX = 0.4,
+        BG_CRYSTAL_COUNT = 15,
+        BG_ROTATION_SPEED = 0.8,
     },
-    
-    SCRIPT_URL = "https://github.com/OMchronicwtf/ChronosHUB-MM2/raw/refs/heads/main/ChronosHUB%201.0.lua"
-}
-
-local LoadingState = {
-    currentStatus = "Initializing...",
-    progress = 0,
-    isComplete = false,
-    isSuccess = false,
-    errorMessage = nil
 }
 
 local function Tween(instance, properties, duration, style, direction)
     style = style or Enum.EasingStyle.Quint
     direction = direction or Enum.EasingDirection.Out
-    local tween = TweenService:Create(
-        instance, 
-        TweenInfo.new(duration, style, direction), 
-        properties
-    )
+    local tween = TweenService:Create(instance, TweenInfo.new(duration, style, direction), properties)
     tween:Play()
     return tween
 end
@@ -110,49 +164,59 @@ local function CreateStroke(parent, color, thickness, transparency)
     return stroke
 end
 
-local function ApplyIcon(imageLabel, iconName)
-    local iconData = Icons.GetIcon(iconName)
-    if iconData then
-        imageLabel.Image = iconData.Image
-        if iconData.ImageRectSize and iconData.ImageRectSize.X > 0 then
-            imageLabel.ImageRectSize = iconData.ImageRectSize
-            imageLabel.ImageRectOffset = iconData.ImageRectOffset
-        end
-        return true
-    end
-    return false
+local function CreatePadding(parent, padding)
+    local pad = Instance.new("UIPadding")
+    pad.PaddingTop = UDim.new(0, padding)
+    pad.PaddingBottom = UDim.new(0, padding)
+    pad.PaddingLeft = UDim.new(0, padding)
+    pad.PaddingRight = UDim.new(0, padding)
+    pad.Parent = parent
+    return pad
 end
 
-local LoaderGui = Instance.new("ScreenGui")
-LoaderGui.Name = "ChronosLoader_Premium"
-LoaderGui.Parent = CoreGui
-LoaderGui.IgnoreGuiInset = true
-LoaderGui.ResetOnSpawn = false
-LoaderGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-LoaderGui.DisplayOrder = 999
+local function DeleteSavedKey()
+    pcall(function()
+        if isfile and isfile("JunkieKey_Saved.txt") then
+            delfile("JunkieKey_Saved.txt")
+        end
+    end)
+end
+
+for _, gui in ipairs(CoreGui:GetChildren()) do
+    if gui.Name == "JunkieKeySystem" then
+        gui:Destroy()
+    end
+end
+
+local KeySystemGui = Instance.new("ScreenGui")
+KeySystemGui.Name = "JunkieKeySystem"
+KeySystemGui.Parent = CoreGui
+KeySystemGui.IgnoreGuiInset = true
+KeySystemGui.ResetOnSpawn = false
+KeySystemGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+KeySystemGui.DisplayOrder = 999
 
 local Background = Instance.new("Frame")
 Background.Name = "Background"
 Background.Size = UDim2.fromScale(1, 1)
 Background.BackgroundColor3 = CONFIG.COLORS.GRADIENT_START
 Background.BorderSizePixel = 0
-Background.BackgroundTransparency = 0
-Background.Parent = LoaderGui
+Background.Parent = KeySystemGui
 
 local GradientOverlay = Instance.new("Frame")
 GradientOverlay.Name = "GradientOverlay"
 GradientOverlay.Size = UDim2.fromScale(1, 1)
 GradientOverlay.BackgroundColor3 = CONFIG.COLORS.GRADIENT_END
 GradientOverlay.BorderSizePixel = 0
-GradientOverlay.BackgroundTransparency = 0
 GradientOverlay.Parent = Background
 
 local BGGradient = Instance.new("UIGradient")
 BGGradient.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(0, CONFIG.COLORS.GRADIENT_START),
+    ColorSequenceKeypoint.new(0.5, Color3.fromHex("#120a20")),
     ColorSequenceKeypoint.new(1, CONFIG.COLORS.GRADIENT_END)
 })
-BGGradient.Rotation = 45
+BGGradient.Rotation = 135
 BGGradient.Parent = GradientOverlay
 
 local Vignette = Instance.new("ImageLabel")
@@ -161,7 +225,7 @@ Vignette.Size = UDim2.fromScale(1, 1)
 Vignette.BackgroundTransparency = 1
 Vignette.Image = "rbxassetid://1526405635"
 Vignette.ImageColor3 = Color3.new(0, 0, 0)
-Vignette.ImageTransparency = 0.2
+Vignette.ImageTransparency = 0.15
 Vignette.ScaleType = Enum.ScaleType.Stretch
 Vignette.ZIndex = 2
 Vignette.Parent = Background
@@ -173,12 +237,12 @@ Scanlines.BackgroundTransparency = 1
 Scanlines.ZIndex = 3
 Scanlines.Parent = Background
 
-for i = 1, 80 do
+for i = 1, 100 do
     local line = Instance.new("Frame")
     line.Size = UDim2.new(1, 0, 0, 1)
-    line.Position = UDim2.fromScale(0, i / 80)
+    line.Position = UDim2.fromScale(0, i / 100)
     line.BackgroundColor3 = Color3.new(0, 0, 0)
-    line.BackgroundTransparency = 0.96
+    line.BackgroundTransparency = 0.97
     line.BorderSizePixel = 0
     line.Parent = Scanlines
 end
@@ -191,106 +255,87 @@ ParticleContainer.ClipsDescendants = true
 ParticleContainer.ZIndex = 4
 ParticleContainer.Parent = Background
 
-local function CreateFloatingMoon()
-    local size = math.random(20, 45)
+local BGCrystalContainer = Instance.new("Frame")
+BGCrystalContainer.Name = "BGCrystalContainer"
+BGCrystalContainer.Size = UDim2.fromScale(1, 1)
+BGCrystalContainer.BackgroundTransparency = 1
+BGCrystalContainer.ZIndex = 1
+BGCrystalContainer.Parent = Background
+
+local function CreateFloatingCrystal()
+    if not KeySystemGui or not KeySystemGui.Parent then return end
+    if isMinimized then return end
+    local size = math.random(25, 50)
+    local transparency = math.random(55, 80) / 100
     
-    local moonHolder = Instance.new("Frame")
-    moonHolder.Name = "FloatingMoon"
-    moonHolder.Size = UDim2.fromOffset(size, size)
-    moonHolder.Position = UDim2.fromScale(math.random() * 1, 1.1)
-    moonHolder.BackgroundTransparency = 1
-    moonHolder.BorderSizePixel = 0
-    moonHolder.ZIndex = 4
-    moonHolder.Rotation = math.random(-40, 40)
-    moonHolder.Parent = ParticleContainer
+    local crystalHolder = Instance.new("Frame")
+    crystalHolder.Name = "FloatingCrystal"
+    crystalHolder.Size = UDim2.fromOffset(size, size)
+    crystalHolder.Position = UDim2.fromScale(math.random() * 1, 1.1)
+    crystalHolder.BackgroundTransparency = 1
+    crystalHolder.Rotation = math.random(-30, 30)
+    crystalHolder.ZIndex = 4
+    crystalHolder.Parent = ParticleContainer
     
-    local transparency = math.random(50, 75) / 100
+    local crystalIcon = Instance.new("ImageLabel")
+    crystalIcon.Name = "CrystalImg"
+    crystalIcon.Size = UDim2.fromScale(1, 1)
+    crystalIcon.BackgroundTransparency = 1
+    crystalIcon.ImageColor3 = CONFIG.COLORS.PRIMARY
+    crystalIcon.ImageTransparency = transparency
+    crystalIcon.ScaleType = Enum.ScaleType.Fit
+    crystalIcon.ZIndex = 4
+    crystalIcon.Parent = crystalHolder
     
-    local moonIcon = Instance.new("ImageLabel")
-    moonIcon.Name = "MoonImg"
-    moonIcon.Size = UDim2.fromScale(1, 1)
-    moonIcon.BackgroundTransparency = 1
-    moonIcon.BorderSizePixel = 0
-    moonIcon.ImageColor3 = CONFIG.COLORS.PRIMARY
-    moonIcon.ImageTransparency = transparency
-    moonIcon.ScaleType = Enum.ScaleType.Fit
-    moonIcon.ZIndex = 4
-    moonIcon.Parent = moonHolder
+    local iconOptions = {"key", "key-round", "lock", "star", "moon"}
+    local selectedIcon = iconOptions[math.random(1, #iconOptions)]
+    ApplyIcon(crystalIcon, selectedIcon)
     
-    local usedIcon = ApplyIcon(moonIcon, "moon")
-    
-    if not usedIcon then
-        moonIcon:Destroy()
-        local mainCircle = Instance.new("Frame")
-        mainCircle.Size = UDim2.fromScale(1, 1)
-        mainCircle.BackgroundColor3 = CONFIG.COLORS.PRIMARY
-        mainCircle.BackgroundTransparency = transparency
-        mainCircle.BorderSizePixel = 0
-        mainCircle.ZIndex = 4
-        mainCircle.Parent = moonHolder
-        CreateCorner(mainCircle, UDim.new(1, 0))
-        
-        local cutout = Instance.new("Frame")
-        cutout.Size = UDim2.fromScale(0.8, 0.8)
-        cutout.Position = UDim2.fromScale(0.35, 0.1)
-        cutout.BackgroundColor3 = CONFIG.COLORS.GRADIENT_START 
-        cutout.BackgroundTransparency = transparency
-        cutout.BorderSizePixel = 0
-        cutout.ZIndex = 5
-        cutout.Parent = moonHolder
-        CreateCorner(cutout, UDim.new(1, 0))
-    end
-    
-    if math.random() > 0.5 then
+    if math.random() > 0.6 then
         local glow = Instance.new("ImageLabel")
-        glow.Size = UDim2.fromScale(2, 2)
+        glow.Size = UDim2.fromScale(2.2, 2.2)
         glow.Position = UDim2.fromScale(0.5, 0.5)
         glow.AnchorPoint = Vector2.new(0.5, 0.5)
         glow.BackgroundTransparency = 1
-        glow.BorderSizePixel = 0
         glow.Image = "rbxassetid://5028857084"
         glow.ImageColor3 = CONFIG.COLORS.PRIMARY
-        glow.ImageTransparency = 0.85
+        glow.ImageTransparency = 0.88
         glow.ZIndex = 3
-        glow.Parent = moonHolder
+        glow.Parent = crystalHolder
     end
     
-    local duration = math.random(10, 18)
-    local drift = (math.random() - 0.5) * 0.25
-    local rotationEnd = moonHolder.Rotation + math.random(-60, 60)
+    local duration = math.random(12, 20)
+    local drift = (math.random() - 0.5) * 0.3
+    local rotationEnd = crystalHolder.Rotation + math.random(-90, 90)
     
-    Tween(moonHolder, {
-        Position = UDim2.fromScale(moonHolder.Position.X.Scale + drift, -0.15),
+    Tween(crystalHolder, {
+        Position = UDim2.fromScale(crystalHolder.Position.X.Scale + drift, -0.15),
         Rotation = rotationEnd
     }, duration, Enum.EasingStyle.Linear)
     
-    for _, child in ipairs(moonHolder:GetChildren()) do
-        if child:IsA("ImageLabel") then
-            Tween(child, {ImageTransparency = 1}, duration * 0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-        elseif child:IsA("Frame") then
-            Tween(child, {BackgroundTransparency = 1}, duration * 0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-        end
-    end
+    Tween(crystalIcon, {ImageTransparency = 1}, duration * 0.85, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
     
     task.delay(duration, function()
-        if moonHolder then moonHolder:Destroy() end
+        if crystalHolder and crystalHolder.Parent then crystalHolder:Destroy() end
     end)
 end
 
 local function CreateStarParticle()
-    local size = math.random(2, 5)
+    if not KeySystemGui or not KeySystemGui.Parent then return end
+    if isMinimized then return end
+    local size = math.random(2, 6)
     local particle = Instance.new("Frame")
     particle.Size = UDim2.fromOffset(size, size)
     particle.Position = UDim2.fromScale(math.random() * 1, 1.05)
-    particle.BackgroundColor3 = CONFIG.COLORS.PRIMARY
-    particle.BackgroundTransparency = math.random(65, 85) / 100
+    particle.BackgroundColor3 = CONFIG.COLORS.ACCENT
+    particle.BackgroundTransparency = math.random(60, 85) / 100
     particle.BorderSizePixel = 0
     particle.ZIndex = 4
     particle.Parent = ParticleContainer
     CreateCorner(particle, UDim.new(1, 0))
     
-    local duration = math.random(7, 14)
-    local drift = (math.random() - 0.5) * 0.35
+    local duration = math.random(8, 15)
+    local drift = (math.random() - 0.5) * 0.4
     
     Tween(particle, {
         Position = UDim2.fromScale(particle.Position.X.Scale + drift, -0.1),
@@ -298,74 +343,45 @@ local function CreateStarParticle()
     }, duration, Enum.EasingStyle.Linear)
     
     task.delay(duration, function()
-        if particle then particle:Destroy() end
+        if particle and particle.Parent then particle:Destroy() end
     end)
 end
 
-local MoonBackgroundContainer = Instance.new("Frame")
-MoonBackgroundContainer.Name = "MoonBackgroundContainer"
-MoonBackgroundContainer.Size = UDim2.fromScale(1, 1)
-MoonBackgroundContainer.BackgroundTransparency = 1
-MoonBackgroundContainer.BorderSizePixel = 0
-MoonBackgroundContainer.ZIndex = 1
-MoonBackgroundContainer.Parent = Background
-
-local bgMoons = {}
-for i = 1, CONFIG.PARTICLES.BG_MOON_COUNT do
-    local size = math.random(60, 140)
-    local transparency = math.random(90, 96) / 100
+local bgCrystals = {}
+for i = 1, CONFIG.PARTICLES.BG_CRYSTAL_COUNT do
+    local size = math.random(50, 100)
+    local transparency = math.random(92, 97) / 100
     
-    local moonBG = Instance.new("Frame")
-    moonBG.Name = "BGMoon" .. i
-    moonBG.Size = UDim2.fromOffset(size, size)
-    moonBG.Position = UDim2.fromScale(math.random() * 1.1 - 0.05, math.random() * 1.1 - 0.05)
-    moonBG.BackgroundTransparency = 1
-    moonBG.BorderSizePixel = 0
-    moonBG.Rotation = math.random(0, 360)
-    moonBG.ZIndex = 1
-    moonBG.Parent = MoonBackgroundContainer
+    local crystalBG = Instance.new("Frame")
+    crystalBG.Name = "BGCrystal" .. i
+    crystalBG.Size = UDim2.fromOffset(size, size)
+    crystalBG.Position = UDim2.fromScale(math.random() * 1.1 - 0.05, math.random() * 1.1 - 0.05)
+    crystalBG.BackgroundTransparency = 1
+    crystalBG.Rotation = math.random(0, 360)
+    crystalBG.ZIndex = 1
+    crystalBG.Parent = BGCrystalContainer
     
-    local moonIcon = Instance.new("ImageLabel")
-    moonIcon.Name = "MoonImg"
-    moonIcon.Size = UDim2.fromScale(1, 1)
-    moonIcon.BackgroundTransparency = 1
-    moonIcon.BorderSizePixel = 0
-    moonIcon.ImageColor3 = CONFIG.COLORS.PRIMARY
-    moonIcon.ImageTransparency = transparency
-    moonIcon.ScaleType = Enum.ScaleType.Fit
-    moonIcon.ZIndex = 1
-    moonIcon.Parent = moonBG
+    local crystalIcon = Instance.new("ImageLabel")
+    crystalIcon.Name = "CrystalImg"
+    crystalIcon.Size = UDim2.fromScale(1, 1)
+    crystalIcon.BackgroundTransparency = 1
+    crystalIcon.ImageColor3 = CONFIG.COLORS.PRIMARY
+    crystalIcon.ImageTransparency = transparency
+    crystalIcon.ScaleType = Enum.ScaleType.Fit
+    crystalIcon.ZIndex = 1
+    crystalIcon.Parent = crystalBG
     
-    local usedIcon = ApplyIcon(moonIcon, "moon")
+    local bgIcons = {"key", "shield", "lock", "fingerprint", "scan"}
+    ApplyIcon(crystalIcon, bgIcons[math.random(1, #bgIcons)])
     
-    if not usedIcon then
-        moonIcon:Destroy()
-        local mainC = Instance.new("Frame")
-        mainC.Size = UDim2.fromScale(1, 1)
-        mainC.BackgroundColor3 = CONFIG.COLORS.PRIMARY
-        mainC.BackgroundTransparency = transparency
-        mainC.BorderSizePixel = 0
-        mainC.ZIndex = 1
-        mainC.Parent = moonBG
-        CreateCorner(mainC, UDim.new(1, 0))
-        
-        local cutC = Instance.new("Frame")
-        cutC.Size = UDim2.fromScale(0.8, 0.8)
-        cutC.Position = UDim2.fromScale(0.35, 0.1)
-        cutC.BackgroundColor3 = CONFIG.COLORS.GRADIENT_START
-        cutC.BackgroundTransparency = transparency
-        cutC.BorderSizePixel = 0
-        cutC.ZIndex = 2
-        cutC.Parent = moonBG
-        CreateCorner(cutC, UDim.new(1, 0))
-    end
-    
-    bgMoons[i] = moonBG
+    bgCrystals[i] = crystalBG
     
     task.spawn(function()
-        local speed = (math.random() - 0.5) * 0.06 * CONFIG.PARTICLES.BG_MOON_ROTATION_SPEED
-        while moonBG.Parent and LoaderGui.Parent do
-            moonBG.Rotation = moonBG.Rotation + speed
+        local speed = (math.random() - 0.5) * 0.04 * CONFIG.PARTICLES.BG_ROTATION_SPEED
+        while crystalBG and crystalBG.Parent and KeySystemGui and KeySystemGui.Parent do
+            if not isMinimized then
+                crystalBG.Rotation = crystalBG.Rotation + speed
+            end
             task.wait(0.03)
         end
     end)
@@ -373,7 +389,7 @@ end
 
 local CardContainer = Instance.new("Frame")
 CardContainer.Name = "CardContainer"
-CardContainer.Size = UDim2.fromOffset(420, 320)
+CardContainer.Size = UDim2.fromOffset(380, 520)
 CardContainer.Position = UDim2.fromScale(0.5, 0.5)
 CardContainer.AnchorPoint = Vector2.new(0.5, 0.5)
 CardContainer.BackgroundTransparency = 1
@@ -384,41 +400,41 @@ local ShadowLayers = {}
 
 local CardShadow1 = Instance.new("Frame")
 CardShadow1.Name = "CardShadow1"
-CardShadow1.Size = UDim2.new(1, 60, 1, 60)
+CardShadow1.Size = UDim2.new(1, 70, 1, 70)
 CardShadow1.Position = UDim2.fromScale(0.5, 0.52)
 CardShadow1.AnchorPoint = Vector2.new(0.5, 0.5)
 CardShadow1.BackgroundColor3 = Color3.new(0, 0, 0)
-CardShadow1.BackgroundTransparency = 0.85
+CardShadow1.BackgroundTransparency = 0.82
 CardShadow1.BorderSizePixel = 0
 CardShadow1.ZIndex = 7
 CardShadow1.Parent = CardContainer
-CreateCorner(CardShadow1, UDim.new(0, 30))
+CreateCorner(CardShadow1, UDim.new(0, 36))
 table.insert(ShadowLayers, CardShadow1)
 
 local CardShadow2 = Instance.new("Frame")
 CardShadow2.Name = "CardShadow2"
-CardShadow2.Size = UDim2.new(1, 40, 1, 40)
+CardShadow2.Size = UDim2.new(1, 45, 1, 45)
 CardShadow2.Position = UDim2.fromScale(0.5, 0.51)
 CardShadow2.AnchorPoint = Vector2.new(0.5, 0.5)
 CardShadow2.BackgroundColor3 = Color3.new(0, 0, 0)
-CardShadow2.BackgroundTransparency = 0.75
+CardShadow2.BackgroundTransparency = 0.72
 CardShadow2.BorderSizePixel = 0
 CardShadow2.ZIndex = 8
 CardShadow2.Parent = CardContainer
-CreateCorner(CardShadow2, UDim.new(0, 28))
+CreateCorner(CardShadow2, UDim.new(0, 32))
 table.insert(ShadowLayers, CardShadow2)
 
 local CardShadow3 = Instance.new("Frame")
 CardShadow3.Name = "CardShadow3"
-CardShadow3.Size = UDim2.new(1, 20, 1, 20)
+CardShadow3.Size = UDim2.new(1, 22, 1, 22)
 CardShadow3.Position = UDim2.fromScale(0.5, 0.505)
 CardShadow3.AnchorPoint = Vector2.new(0.5, 0.5)
 CardShadow3.BackgroundColor3 = Color3.new(0, 0, 0)
-CardShadow3.BackgroundTransparency = 0.65
+CardShadow3.BackgroundTransparency = 0.62
 CardShadow3.BorderSizePixel = 0
 CardShadow3.ZIndex = 9
 CardShadow3.Parent = CardContainer
-CreateCorner(CardShadow3, UDim.new(0, 26))
+CreateCorner(CardShadow3, UDim.new(0, 30))
 table.insert(ShadowLayers, CardShadow3)
 
 local Card = Instance.new("Frame")
@@ -427,20 +443,240 @@ Card.Size = UDim2.fromScale(1, 1)
 Card.Position = UDim2.fromScale(0.5, 0.5)
 Card.AnchorPoint = Vector2.new(0.5, 0.5)
 Card.BackgroundColor3 = CONFIG.COLORS.CARD
-Card.BackgroundTransparency = 0.05
+Card.BackgroundTransparency = 0.02
 Card.BorderSizePixel = 0
 Card.ZIndex = 10
+Card.ClipsDescendants = true
 Card.Parent = CardContainer
 
-CreateCorner(Card, UDim.new(0, 24))
+CreateCorner(Card, UDim.new(0, 28))
 
-local CardBorder = CreateStroke(Card, CONFIG.COLORS.PRIMARY, 2, 0.5)
+local CardBorder = CreateStroke(Card, CONFIG.COLORS.PRIMARY, 1.5, 0.5)
 CardBorder.Name = "CardBorder"
+
+local InnerGlow = Instance.new("Frame")
+InnerGlow.Name = "InnerGlow"
+InnerGlow.Size = UDim2.new(1, 0, 0.4, 0)
+InnerGlow.Position = UDim2.fromScale(0, 0)
+InnerGlow.BackgroundColor3 = CONFIG.COLORS.PRIMARY
+InnerGlow.BackgroundTransparency = 0.92
+InnerGlow.BorderSizePixel = 0
+InnerGlow.ZIndex = 10
+InnerGlow.Parent = Card
+
+local InnerGlowGradient = Instance.new("UIGradient")
+InnerGlowGradient.Transparency = NumberSequence.new({
+    NumberSequenceKeypoint.new(0, 0),
+    NumberSequenceKeypoint.new(1, 1)
+})
+InnerGlowGradient.Rotation = 180
+InnerGlowGradient.Parent = InnerGlow
+
+local MinimizeButton = Instance.new("TextButton")
+MinimizeButton.Name = "MinimizeButton"
+MinimizeButton.Size = UDim2.fromOffset(36, 36)
+MinimizeButton.Position = UDim2.new(1, -12, 0, 12)
+MinimizeButton.AnchorPoint = Vector2.new(1, 0)
+MinimizeButton.BackgroundColor3 = CONFIG.COLORS.BUTTON_SECONDARY
+MinimizeButton.BackgroundTransparency = 0.3
+MinimizeButton.BorderSizePixel = 0
+MinimizeButton.Text = ""
+MinimizeButton.AutoButtonColor = false
+MinimizeButton.ZIndex = 15
+MinimizeButton.Parent = Card
+
+CreateCorner(MinimizeButton, UDim.new(0, 10))
+local MinimizeStroke = CreateStroke(MinimizeButton, CONFIG.COLORS.TEXT_MUTED, 1, 0.7)
+
+local MinimizeIcon = Instance.new("ImageLabel")
+MinimizeIcon.Name = "Icon"
+MinimizeIcon.Size = UDim2.fromOffset(18, 18)
+MinimizeIcon.Position = UDim2.fromScale(0.5, 0.5)
+MinimizeIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+MinimizeIcon.BackgroundTransparency = 1
+MinimizeIcon.ImageColor3 = CONFIG.COLORS.TEXT_DIM
+MinimizeIcon.ZIndex = 16
+MinimizeIcon.Parent = MinimizeButton
+
+ApplyIcon(MinimizeIcon, "eye")
+
+MinimizeButton.MouseEnter:Connect(function()
+    Tween(MinimizeButton, {BackgroundTransparency = 0.1}, 0.2)
+    Tween(MinimizeIcon, {ImageColor3 = CONFIG.COLORS.PRIMARY}, 0.2)
+    Tween(MinimizeStroke, {Color = CONFIG.COLORS.PRIMARY, Transparency = 0.3}, 0.2)
+end)
+
+MinimizeButton.MouseLeave:Connect(function()
+    Tween(MinimizeButton, {BackgroundTransparency = 0.3}, 0.2)
+    Tween(MinimizeIcon, {ImageColor3 = CONFIG.COLORS.TEXT_DIM}, 0.2)
+    Tween(MinimizeStroke, {Color = CONFIG.COLORS.TEXT_MUTED, Transparency = 0.7}, 0.2)
+end)
+
+local MinimizedIndicator = Instance.new("TextButton")
+MinimizedIndicator.Name = "MinimizedIndicator"
+MinimizedIndicator.Size = UDim2.fromOffset(50, 50)
+MinimizedIndicator.Position = UDim2.new(1, -20, 0.5, 0)
+MinimizedIndicator.AnchorPoint = Vector2.new(1, 0.5)
+MinimizedIndicator.BackgroundColor3 = CONFIG.COLORS.PRIMARY
+MinimizedIndicator.BackgroundTransparency = 0.15
+MinimizedIndicator.BorderSizePixel = 0
+MinimizedIndicator.Text = ""
+MinimizedIndicator.AutoButtonColor = false
+MinimizedIndicator.Visible = false
+MinimizedIndicator.ZIndex = 100
+MinimizedIndicator.Parent = KeySystemGui
+
+CreateCorner(MinimizedIndicator, UDim.new(1, 0))
+local IndicatorStroke = CreateStroke(MinimizedIndicator, CONFIG.COLORS.ACCENT, 2, 0.3)
+
+local IndicatorIcon = Instance.new("ImageLabel")
+IndicatorIcon.Name = "Icon"
+IndicatorIcon.Size = UDim2.fromOffset(24, 24)
+IndicatorIcon.Position = UDim2.fromScale(0.5, 0.5)
+IndicatorIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+IndicatorIcon.BackgroundTransparency = 1
+IndicatorIcon.ImageColor3 = CONFIG.COLORS.TEXT
+IndicatorIcon.ZIndex = 101
+IndicatorIcon.Parent = MinimizedIndicator
+
+ApplyIcon(IndicatorIcon, "eye-off")
+
+MinimizedIndicator.MouseEnter:Connect(function()
+    Tween(MinimizedIndicator, {Size = UDim2.fromOffset(55, 55)}, 0.2, Enum.EasingStyle.Back)
+    Tween(IndicatorStroke, {Transparency = 0}, 0.2)
+end)
+
+MinimizedIndicator.MouseLeave:Connect(function()
+    Tween(MinimizedIndicator, {Size = UDim2.fromOffset(50, 50)}, 0.2)
+    Tween(IndicatorStroke, {Transparency = 0.3}, 0.2)
+end)
+
+local function ToggleMinimize()
+    isMinimized = not isMinimized
+    
+    if isMinimized then
+        ApplyIcon(MinimizeIcon, "eye-off")
+        
+        Tween(Background, {BackgroundTransparency = 1}, 0.4)
+        Tween(GradientOverlay, {BackgroundTransparency = 1}, 0.4)
+        Tween(Vignette, {ImageTransparency = 1}, 0.4)
+        
+        for _, line in ipairs(Scanlines:GetChildren()) do
+            if line:IsA("Frame") then
+                Tween(line, {BackgroundTransparency = 1}, 0.3)
+            end
+        end
+        
+        Tween(CardContainer, {
+            Position = UDim2.new(0.5, 0, -0.5, 0),
+        }, 0.5, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+        
+        for _, shadow in ipairs(ShadowLayers) do
+            Tween(shadow, {BackgroundTransparency = 1}, 0.3)
+        end
+        
+        for _, crystal in ipairs(bgCrystals) do
+            if crystal and crystal.Parent then
+                for _, child in ipairs(crystal:GetChildren()) do
+                    if child:IsA("ImageLabel") then
+                        Tween(child, {ImageTransparency = 1}, 0.3)
+                    end
+                end
+            end
+        end
+        
+        for _, child in ipairs(ParticleContainer:GetChildren()) do
+            if child:IsA("Frame") then
+                Tween(child, {BackgroundTransparency = 1}, 0.3)
+                for _, subChild in ipairs(child:GetChildren()) do
+                    if subChild:IsA("ImageLabel") then
+                        Tween(subChild, {ImageTransparency = 1}, 0.3)
+                    end
+                end
+            end
+        end
+        
+        task.delay(0.3, function()
+            MinimizedIndicator.Visible = true
+            MinimizedIndicator.Position = UDim2.new(1, 20, 0.5, 0)
+            Tween(MinimizedIndicator, {Position = UDim2.new(1, -20, 0.5, 0)}, 0.3, Enum.EasingStyle.Back)
+        end)
+    else
+        ApplyIcon(MinimizeIcon, "eye")
+        
+        Tween(MinimizedIndicator, {Position = UDim2.new(1, 20, 0.5, 0)}, 0.2)
+        task.delay(0.2, function()
+            MinimizedIndicator.Visible = false
+        end)
+        
+        Tween(Background, {BackgroundTransparency = 0}, 0.4)
+        Tween(GradientOverlay, {BackgroundTransparency = 0}, 0.4)
+        Tween(Vignette, {ImageTransparency = 0.15}, 0.4)
+        
+        for _, line in ipairs(Scanlines:GetChildren()) do
+            if line:IsA("Frame") then
+                Tween(line, {BackgroundTransparency = 0.97}, 0.3)
+            end
+        end
+        
+        Tween(CardContainer, {
+            Position = UDim2.fromScale(0.5, 0.5),
+        }, 0.5, Enum.EasingStyle.Back)
+        
+        task.delay(0.2, function()
+            for i, shadow in ipairs(ShadowLayers) do
+                local targetTransparency = shadow.Name == "CardShadow1" and 0.82 or (shadow.Name == "CardShadow2" and 0.72 or 0.62)
+                Tween(shadow, {BackgroundTransparency = targetTransparency}, 0.4)
+            end
+        end)
+        
+        for i, crystal in ipairs(bgCrystals) do
+            if crystal and crystal.Parent then
+                for _, child in ipairs(crystal:GetChildren()) do
+                    if child:IsA("ImageLabel") then
+                        local transparency = math.random(92, 97) / 100
+                        Tween(child, {ImageTransparency = transparency}, 0.4)
+                    end
+                end
+            end
+        end
+    end
+end
+
+MinimizeButton.MouseButton1Click:Connect(ToggleMinimize)
+MinimizedIndicator.MouseButton1Click:Connect(ToggleMinimize)
+
+task.spawn(function()
+    while KeySystemGui and KeySystemGui.Parent do
+        if MinimizedIndicator.Visible then
+            Tween(MinimizedIndicator, {BackgroundTransparency = 0.3}, 0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+            task.wait(0.8)
+            if MinimizedIndicator.Visible then
+                Tween(MinimizedIndicator, {BackgroundTransparency = 0.1}, 0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+            end
+            task.wait(0.8)
+        else
+            task.wait(0.1)
+        end
+    end
+end)
+
+local WelcomeText = Instance.new("TextLabel")
+WelcomeText.Name = "WelcomeText"
+WelcomeText.Size = UDim2.new(1, 0, 0, 18)
+WelcomeText.Position = UDim2.new(0, 0, 0, 12.5)
+WelcomeText.BackgroundTransparency = 1
+WelcomeText.Text = "Welcome!"
+WelcomeText.TextColor3 = CONFIG.COLORS.TEXT_DIM
+WelcomeText.TextSize = 11
+WelcomeText.Font = Enum.Font.GothamMedium
+WelcomeText.ZIndex = 11
+WelcomeText.Parent = Card
 
 local LogoContainer = Instance.new("Frame")
 LogoContainer.Name = "LogoContainer"
-LogoContainer.Size = UDim2.fromOffset(90, 90)
-LogoContainer.Position = UDim2.new(0.5, 0, 0, 40)
+LogoContainer.Size = UDim2.fromOffset(80, 80)
+LogoContainer.Position = UDim2.new(0.5, 0, 0, 50)
 LogoContainer.AnchorPoint = Vector2.new(0.5, 0)
 LogoContainer.BackgroundTransparency = 1
 LogoContainer.ZIndex = 11
@@ -448,11 +684,11 @@ LogoContainer.Parent = Card
 
 local OuterGlow = Instance.new("Frame")
 OuterGlow.Name = "OuterGlow"
-OuterGlow.Size = UDim2.fromOffset(95, 95)
+OuterGlow.Size = UDim2.fromOffset(90, 90)
 OuterGlow.Position = UDim2.fromScale(0.5, 0.5)
 OuterGlow.AnchorPoint = Vector2.new(0.5, 0.5)
 OuterGlow.BackgroundColor3 = CONFIG.COLORS.PRIMARY
-OuterGlow.BackgroundTransparency = 0.9
+OuterGlow.BackgroundTransparency = 0.88
 OuterGlow.BorderSizePixel = 0
 OuterGlow.ZIndex = 10
 OuterGlow.Parent = LogoContainer
@@ -460,72 +696,43 @@ CreateCorner(OuterGlow, UDim.new(1, 0))
 
 local LogoRing = Instance.new("Frame")
 LogoRing.Name = "LogoRing"
-LogoRing.Size = UDim2.fromOffset(80, 80)
+LogoRing.Size = UDim2.fromOffset(72, 72)
 LogoRing.Position = UDim2.fromScale(0.5, 0.5)
 LogoRing.AnchorPoint = Vector2.new(0.5, 0.5)
-LogoRing.BackgroundColor3 = Color3.fromHex("#15151f")
-LogoRing.BackgroundTransparency = 0.3
+LogoRing.BackgroundColor3 = Color3.fromHex("#18182a")
+LogoRing.BackgroundTransparency = 0.2
 LogoRing.BorderSizePixel = 0
 LogoRing.ZIndex = 11
 LogoRing.Parent = LogoContainer
 CreateCorner(LogoRing, UDim.new(1, 0))
 
-local LogoRingBorder = CreateStroke(LogoRing, CONFIG.COLORS.PRIMARY, 2.5, 0.2)
+local LogoRingBorder = CreateStroke(LogoRing, CONFIG.COLORS.PRIMARY, 2.5, 0.15)
 
-local MoonLogoContainer = Instance.new("Frame")
-MoonLogoContainer.Name = "MoonLogoContainer"
-MoonLogoContainer.Size = UDim2.fromOffset(40, 40)
-MoonLogoContainer.Position = UDim2.fromScale(0.5, 0.5)
-MoonLogoContainer.AnchorPoint = Vector2.new(0.5, 0.5)
-MoonLogoContainer.BackgroundTransparency = 1
-MoonLogoContainer.ZIndex = 12
-MoonLogoContainer.Parent = LogoRing
+local KeyIconContainer = Instance.new("Frame")
+KeyIconContainer.Name = "KeyIconContainer"
+KeyIconContainer.Size = UDim2.fromOffset(36, 36)
+KeyIconContainer.Position = UDim2.fromScale(0.5, 0.5)
+KeyIconContainer.AnchorPoint = Vector2.new(0.5, 0.5)
+KeyIconContainer.BackgroundTransparency = 1
+KeyIconContainer.ZIndex = 12
+KeyIconContainer.Parent = LogoRing
 
-local MoonLogoIcon = Instance.new("ImageLabel")
-MoonLogoIcon.Name = "MoonLogoIcon"
-MoonLogoIcon.Size = UDim2.fromScale(1, 1)
-MoonLogoIcon.BackgroundTransparency = 1
-MoonLogoIcon.BorderSizePixel = 0
-MoonLogoIcon.ImageColor3 = CONFIG.COLORS.PRIMARY
-MoonLogoIcon.ImageTransparency = 0
-MoonLogoIcon.ScaleType = Enum.ScaleType.Fit
-MoonLogoIcon.ZIndex = 12
-MoonLogoIcon.Parent = MoonLogoContainer
+local KeyIcon = Instance.new("ImageLabel")
+KeyIcon.Name = "KeyIcon"
+KeyIcon.Size = UDim2.fromScale(1, 1)
+KeyIcon.BackgroundTransparency = 1
+KeyIcon.ImageColor3 = CONFIG.COLORS.PRIMARY
+KeyIcon.ImageTransparency = 0
+KeyIcon.ScaleType = Enum.ScaleType.Fit
+KeyIcon.ZIndex = 12
+KeyIcon.Parent = KeyIconContainer
 
-local usedLogoIcon = ApplyIcon(MoonLogoIcon, "moon-star")
-
-local MoonMain, MoonCutout
-if not usedLogoIcon then
-    MoonLogoIcon:Destroy()
-    
-    MoonMain = Instance.new("Frame")
-    MoonMain.Name = "MoonMain"
-    MoonMain.Size = UDim2.fromScale(1, 1)
-    MoonMain.BackgroundColor3 = CONFIG.COLORS.PRIMARY
-    MoonMain.BackgroundTransparency = 0
-    MoonMain.BorderSizePixel = 0
-    MoonMain.ZIndex = 12
-    MoonMain.Parent = MoonLogoContainer
-    CreateCorner(MoonMain, UDim.new(1, 0))
-    
-    MoonCutout = Instance.new("Frame")
-    MoonCutout.Name = "MoonCutout"
-    MoonCutout.Size = UDim2.fromScale(0.75, 0.75)
-    MoonCutout.Position = UDim2.fromScale(0.4, 0.12)
-    MoonCutout.BackgroundColor3 = Color3.fromHex("#15151f")
-    MoonCutout.BackgroundTransparency = 0
-    MoonCutout.BorderSizePixel = 0
-    MoonCutout.ZIndex = 13
-    MoonCutout.Parent = MoonLogoContainer
-    CreateCorner(MoonCutout, UDim.new(1, 0))
-    
-    MoonLogoContainer.Rotation = -25
-end
+ApplyIcon(KeyIcon, "key-round")
 
 local DecoDots = {}
 for i = 1, 8 do
     local angle = math.rad((i - 1) * 45 - 90)
-    local radius = 52
+    local radius = 48
     local dotSize = 4
     
     local dot = Instance.new("Frame")
@@ -546,139 +753,408 @@ end
 
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Name = "TitleLabel"
-TitleLabel.Size = UDim2.new(1, 0, 0, 40)
+TitleLabel.Size = UDim2.new(1, 0, 0, 36)
 TitleLabel.Position = UDim2.new(0, 0, 0, 140)
 TitleLabel.BackgroundTransparency = 1
 TitleLabel.Text = CONFIG.TITLE
 TitleLabel.TextColor3 = CONFIG.COLORS.TEXT
-TitleLabel.Font = Enum.Font.GothamBold
-TitleLabel.TextSize = 36
+TitleLabel.Font = Enum.Font.GothamBlack
+TitleLabel.TextSize = 26
 TitleLabel.ZIndex = 11
 TitleLabel.Parent = Card
 
 local TitleGradient = Instance.new("UIGradient")
 TitleGradient.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Color3.fromHex("#FFFFFF")),
-    ColorSequenceKeypoint.new(0.4, CONFIG.COLORS.PRIMARY),
-    ColorSequenceKeypoint.new(0.6, CONFIG.COLORS.PRIMARY),
+    ColorSequenceKeypoint.new(0.35, CONFIG.COLORS.PRIMARY),
+    ColorSequenceKeypoint.new(0.65, CONFIG.COLORS.PRIMARY),
     ColorSequenceKeypoint.new(1, Color3.fromHex("#FFFFFF"))
 })
 TitleGradient.Parent = TitleLabel
 
 local SubtitleLabel = Instance.new("TextLabel")
 SubtitleLabel.Name = "SubtitleLabel"
-SubtitleLabel.Size = UDim2.new(1, 0, 0, 20)
-SubtitleLabel.Position = UDim2.new(0, 0, 0, 178)
+SubtitleLabel.Size = UDim2.new(1, 0, 0, 18)
+SubtitleLabel.Position = UDim2.new(0, 0, 0, 172)
 SubtitleLabel.BackgroundTransparency = 1
 SubtitleLabel.Text = CONFIG.SUBTITLE
-SubtitleLabel.TextColor3 = CONFIG.COLORS.TEXT_DIM
+SubtitleLabel.TextColor3 = CONFIG.COLORS.ACCENT
 SubtitleLabel.Font = Enum.Font.GothamMedium
-SubtitleLabel.TextSize = 14
+SubtitleLabel.TextSize = 13
 SubtitleLabel.ZIndex = 11
 SubtitleLabel.Parent = Card
 
-local ProgressFrame = Instance.new("Frame")
-ProgressFrame.Name = "ProgressFrame"
-ProgressFrame.Size = UDim2.new(0.7, 0, 0, 6)
-ProgressFrame.Position = UDim2.new(0.5, 0, 0, 212)
-ProgressFrame.AnchorPoint = Vector2.new(0.5, 0)
-ProgressFrame.BackgroundColor3 = Color3.fromHex("#1a1a25")
-ProgressFrame.BorderSizePixel = 0
-ProgressFrame.ZIndex = 11
-ProgressFrame.Parent = Card
+local InputLabel = Instance.new("TextLabel")
+InputLabel.Name = "InputLabel"
+InputLabel.Size = UDim2.new(0.85, 0, 0, 22)
+InputLabel.Position = UDim2.new(0.5, 0, 0, 205)
+InputLabel.AnchorPoint = Vector2.new(0.5, 0)
+InputLabel.BackgroundTransparency = 1
+InputLabel.Text = "Enter Your Access Key"
+InputLabel.TextColor3 = CONFIG.COLORS.TEXT
+InputLabel.TextSize = 14
+InputLabel.Font = Enum.Font.GothamSemibold
+InputLabel.TextXAlignment = Enum.TextXAlignment.Left
+InputLabel.ZIndex = 11
+InputLabel.Parent = Card
 
-CreateCorner(ProgressFrame, UDim.new(1, 0))
-local ProgressStroke = CreateStroke(ProgressFrame, CONFIG.COLORS.PRIMARY, 1, 0.85)
+local InputContainer = Instance.new("Frame")
+InputContainer.Name = "InputContainer"
+InputContainer.Size = UDim2.new(0.85, 0, 0, 56)
+InputContainer.Position = UDim2.new(0.5, 0, 0, 232)
+InputContainer.AnchorPoint = Vector2.new(0.5, 0)
+InputContainer.BackgroundColor3 = CONFIG.COLORS.INPUT_BG
+InputContainer.BorderSizePixel = 0
+InputContainer.ZIndex = 11
+InputContainer.Parent = Card
 
-local ProgressFill = Instance.new("Frame")
-ProgressFill.Name = "ProgressFill"
-ProgressFill.Size = UDim2.fromScale(0, 1)
-ProgressFill.BackgroundColor3 = CONFIG.COLORS.PRIMARY
-ProgressFill.BorderSizePixel = 0
-ProgressFill.ZIndex = 12
-ProgressFill.ClipsDescendants = true
-ProgressFill.Parent = ProgressFrame
+CreateCorner(InputContainer, UDim.new(0, 16))
 
-CreateCorner(ProgressFill, UDim.new(1, 0))
+local InputStroke = CreateStroke(InputContainer, CONFIG.COLORS.BUTTON_SECONDARY, 1.5, 0.3)
+InputStroke.Name = "InputStroke"
 
-local ProgressGlow = Instance.new("UIGradient")
-ProgressGlow.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, CONFIG.COLORS.SECONDARY),
-    ColorSequenceKeypoint.new(0.5, CONFIG.COLORS.PRIMARY),
-    ColorSequenceKeypoint.new(1, Color3.fromHex("#FFF8DC"))
-})
-ProgressGlow.Parent = ProgressFill
+local InputIcon = Instance.new("ImageLabel")
+InputIcon.Name = "InputIcon"
+InputIcon.Size = UDim2.fromOffset(20, 20)
+InputIcon.Position = UDim2.new(0, 16, 0.5, 0)
+InputIcon.AnchorPoint = Vector2.new(0, 0.5)
+InputIcon.BackgroundTransparency = 1
+InputIcon.ImageColor3 = CONFIG.COLORS.TEXT_DIM
+InputIcon.ImageTransparency = 0.3
+InputIcon.ZIndex = 12
+InputIcon.Parent = InputContainer
 
-local ProgressShine = Instance.new("Frame")
-ProgressShine.Size = UDim2.fromScale(0.25, 1)
-ProgressShine.Position = UDim2.fromScale(-0.25, 0)
-ProgressShine.BackgroundColor3 = Color3.new(1, 1, 1)
-ProgressShine.BackgroundTransparency = 0.6
-ProgressShine.BorderSizePixel = 0
-ProgressShine.ZIndex = 13
-ProgressShine.Parent = ProgressFill
-CreateCorner(ProgressShine, UDim.new(1, 0))
+ApplyIcon(InputIcon, "key")
 
-local ShineGradient = Instance.new("UIGradient")
-ShineGradient.Transparency = NumberSequence.new({
-    NumberSequenceKeypoint.new(0, 1),
-    NumberSequenceKeypoint.new(0.5, 0.4),
-    NumberSequenceKeypoint.new(1, 1)
-})
-ShineGradient.Parent = ProgressShine
+local KeyInput = Instance.new("TextBox")
+KeyInput.Name = "KeyInput"
+KeyInput.Size = UDim2.new(1, -55, 1, 0)
+KeyInput.Position = UDim2.new(0, 45, 0, 0)
+KeyInput.BackgroundTransparency = 1
+KeyInput.Text = ""
+KeyInput.PlaceholderText = "Paste or type your key here..."
+KeyInput.PlaceholderColor3 = CONFIG.COLORS.TEXT_MUTED
+KeyInput.TextColor3 = CONFIG.COLORS.TEXT
+KeyInput.TextSize = 14
+KeyInput.Font = Enum.Font.GothamMedium
+KeyInput.TextXAlignment = Enum.TextXAlignment.Left
+KeyInput.ClearTextOnFocus = false
+KeyInput.ZIndex = 12
+KeyInput.Parent = InputContainer
+
+KeyInput.Focused:Connect(function()
+    Tween(InputStroke, {Color = CONFIG.COLORS.PRIMARY, Transparency = 0}, 0.25)
+    Tween(InputContainer, {BackgroundColor3 = Color3.fromHex("#14141f")}, 0.25)
+    Tween(InputIcon, {ImageColor3 = CONFIG.COLORS.PRIMARY, ImageTransparency = 0}, 0.25)
+end)
+
+KeyInput.FocusLost:Connect(function()
+    Tween(InputStroke, {Color = CONFIG.COLORS.BUTTON_SECONDARY, Transparency = 0.3}, 0.25)
+    Tween(InputContainer, {BackgroundColor3 = CONFIG.COLORS.INPUT_BG}, 0.25)
+    Tween(InputIcon, {ImageColor3 = CONFIG.COLORS.TEXT_DIM, ImageTransparency = 0.3}, 0.25)
+end)
+
+local StatusContainer = Instance.new("Frame")
+StatusContainer.Name = "StatusContainer"
+StatusContainer.Size = UDim2.new(0.85, 0, 0, 24)
+StatusContainer.Position = UDim2.new(0.5, 0, 0, 291)
+StatusContainer.AnchorPoint = Vector2.new(0.5, 0)
+StatusContainer.BackgroundTransparency = 1
+StatusContainer.ZIndex = 11
+StatusContainer.Parent = Card
+
+local StatusLayout = Instance.new("UIListLayout")
+StatusLayout.FillDirection = Enum.FillDirection.Horizontal
+StatusLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+StatusLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+StatusLayout.Padding = UDim.new(0, 6)
+StatusLayout.Parent = StatusContainer
+
+local StatusIcon = Instance.new("ImageLabel")
+StatusIcon.Name = "StatusIcon"
+StatusIcon.Size = UDim2.fromOffset(14, 14)
+StatusIcon.BackgroundTransparency = 1
+StatusIcon.ImageColor3 = CONFIG.COLORS.ACCENT
+StatusIcon.ImageTransparency = 1
+StatusIcon.LayoutOrder = 1
+StatusIcon.ZIndex = 12
+StatusIcon.Parent = StatusContainer
 
 local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Name = "StatusLabel"
-StatusLabel.Size = UDim2.new(1, 0, 0, 20)
-StatusLabel.Position = UDim2.new(0, 0, 0, 228)
+StatusLabel.Size = UDim2.fromOffset(0, 20)
+StatusLabel.AutomaticSize = Enum.AutomaticSize.X
 StatusLabel.BackgroundTransparency = 1
-StatusLabel.Text = "Initializing..."
-StatusLabel.TextColor3 = CONFIG.COLORS.SECONDARY
-StatusLabel.Font = Enum.Font.GothamMedium
-StatusLabel.TextSize = 13
+StatusLabel.Text = ""
+StatusLabel.TextColor3 = CONFIG.COLORS.ACCENT
+StatusLabel.TextSize = 12
+StatusLabel.Font = Enum.Font.GothamSemibold
+StatusLabel.TextTransparency = 1
+StatusLabel.LayoutOrder = 2
 StatusLabel.ZIndex = 11
-StatusLabel.Parent = Card
+StatusLabel.Parent = StatusContainer
 
-local SpinnerContainer = Instance.new("Frame")
-SpinnerContainer.Name = "SpinnerContainer"
-SpinnerContainer.Size = UDim2.fromOffset(44, 44)
-SpinnerContainer.Position = UDim2.new(0.5, 0, 0, 255)
-SpinnerContainer.AnchorPoint = Vector2.new(0.5, 0)
-SpinnerContainer.BackgroundTransparency = 1
-SpinnerContainer.ZIndex = 11
-SpinnerContainer.Parent = Card
-
-local numSpinnerDots = 8
-local spinnerDots = {}
-for i = 1, numSpinnerDots do
-    local angle = math.rad((i - 1) * (360 / numSpinnerDots) - 90)
-    local radius = 18
-    local dotSize = 5
+local function ShowStatus(message, color, duration, iconName)
+    StatusLabel.Text = message
+    StatusLabel.TextColor3 = color or CONFIG.COLORS.ACCENT
+    Tween(StatusLabel, {TextTransparency = 0}, 0.2)
     
-    local dot = Instance.new("Frame")
-    dot.Name = "SpinDot" .. i
-    dot.Size = UDim2.fromOffset(dotSize, dotSize)
-    dot.Position = UDim2.new(
-        0.5, math.cos(angle) * radius - dotSize/2,
-        0.5, math.sin(angle) * radius - dotSize/2
-    )
-    dot.BackgroundColor3 = CONFIG.COLORS.PRIMARY
-    dot.BackgroundTransparency = (i - 1) / numSpinnerDots * 0.9
-    dot.BorderSizePixel = 0
-    dot.ZIndex = 12
-    dot.Parent = SpinnerContainer
-    CreateCorner(dot, UDim.new(1, 0))
+    if iconName then
+        ApplyIcon(StatusIcon, iconName)
+        StatusIcon.ImageColor3 = color or CONFIG.COLORS.ACCENT
+        StatusIcon.Size = UDim2.fromOffset(14, 14)
+        Tween(StatusIcon, {ImageTransparency = 0}, 0.2)
+    else
+        StatusIcon.Size = UDim2.fromOffset(0, 0)
+        Tween(StatusIcon, {ImageTransparency = 1}, 0.2)
+    end
     
-    spinnerDots[i] = dot
+    if duration then
+        task.delay(duration, function()
+            Tween(StatusLabel, {TextTransparency = 1}, 0.4)
+            Tween(StatusIcon, {ImageTransparency = 1}, 0.4)
+        end)
+    end
 end
+
+local function HideStatus()
+    Tween(StatusLabel, {TextTransparency = 1}, 0.3)
+    Tween(StatusIcon, {ImageTransparency = 1}, 0.3)
+end
+
+local VerifyButton = Instance.new("TextButton")
+VerifyButton.Name = "VerifyButton"
+VerifyButton.Size = UDim2.new(0.85, 0, 0, 52)
+VerifyButton.Position = UDim2.new(0.5, 0, 0, 320)
+VerifyButton.AnchorPoint = Vector2.new(0.5, 0)
+VerifyButton.BackgroundColor3 = CONFIG.COLORS.SECONDARY
+VerifyButton.BorderSizePixel = 0
+VerifyButton.Text = ""
+VerifyButton.AutoButtonColor = false
+VerifyButton.ZIndex = 11
+VerifyButton.Parent = Card
+
+CreateCorner(VerifyButton, UDim.new(0, 16))
+
+local VerifyGradient = Instance.new("UIGradient")
+VerifyGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, CONFIG.COLORS.SECONDARY),
+    ColorSequenceKeypoint.new(1, CONFIG.COLORS.PRIMARY)
+})
+VerifyGradient.Rotation = 45
+VerifyGradient.Parent = VerifyButton
+
+local VerifyStroke = CreateStroke(VerifyButton, CONFIG.COLORS.ACCENT, 1, 0.7)
+
+local VerifyContent = Instance.new("Frame")
+VerifyContent.Name = "Content"
+VerifyContent.Size = UDim2.fromScale(1, 1)
+VerifyContent.BackgroundTransparency = 1
+VerifyContent.ZIndex = 12
+VerifyContent.Parent = VerifyButton
+
+local VerifyIcon = Instance.new("ImageLabel")
+VerifyIcon.Name = "Icon"
+VerifyIcon.Size = UDim2.fromOffset(20, 20)
+VerifyIcon.Position = UDim2.new(0.5, -50, 0.5, 0)
+VerifyIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+VerifyIcon.BackgroundTransparency = 1
+VerifyIcon.ImageColor3 = CONFIG.COLORS.TEXT
+VerifyIcon.ZIndex = 13
+VerifyIcon.Parent = VerifyContent
+
+ApplyIcon(VerifyIcon, "shield-check")
+
+local VerifyText = Instance.new("TextLabel")
+VerifyText.Name = "Text"
+VerifyText.Size = UDim2.new(1, -40, 1, 0)
+VerifyText.Position = UDim2.new(0.5, 10, 0, 0)
+VerifyText.AnchorPoint = Vector2.new(0.5, 0)
+VerifyText.BackgroundTransparency = 1
+VerifyText.Text = "VERIFY KEY"
+VerifyText.TextColor3 = CONFIG.COLORS.TEXT
+VerifyText.TextSize = 14
+VerifyText.Font = Enum.Font.GothamBlack
+VerifyText.ZIndex = 13
+VerifyText.Parent = VerifyContent
+
+VerifyButton.MouseEnter:Connect(function()
+    Tween(VerifyButton, {
+        Size = UDim2.new(0.88, 0, 0, 56),
+        Position = UDim2.new(0.5, 0, 0, 318)
+    }, 0.2, Enum.EasingStyle.Back)
+    Tween(VerifyStroke, {Transparency = 0.3}, 0.2)
+end)
+
+VerifyButton.MouseLeave:Connect(function()
+    Tween(VerifyButton, {
+        Size = UDim2.new(0.85, 0, 0, 52),
+        Position = UDim2.new(0.5, 0, 0, 320)
+    }, 0.2)
+    Tween(VerifyStroke, {Transparency = 0.7}, 0.2)
+end)
+
+local GetKeyButton = Instance.new("TextButton")
+GetKeyButton.Name = "GetKeyButton"
+GetKeyButton.Size = UDim2.new(0.85, 0, 0, 48)
+GetKeyButton.Position = UDim2.new(0.5, 0, 0, 382)
+GetKeyButton.AnchorPoint = Vector2.new(0.5, 0)
+GetKeyButton.BackgroundColor3 = CONFIG.COLORS.BUTTON_SECONDARY
+GetKeyButton.BorderSizePixel = 0
+GetKeyButton.Text = ""
+GetKeyButton.AutoButtonColor = false
+GetKeyButton.ZIndex = 11
+GetKeyButton.Parent = Card
+
+CreateCorner(GetKeyButton, UDim.new(0, 16))
+
+local GetKeyStroke = CreateStroke(GetKeyButton, CONFIG.COLORS.TEXT_MUTED, 1, 0.7)
+
+local GetKeyContent = Instance.new("Frame")
+GetKeyContent.Name = "Content"
+GetKeyContent.Size = UDim2.fromScale(1, 1)
+GetKeyContent.BackgroundTransparency = 1
+GetKeyContent.ZIndex = 12
+GetKeyContent.Parent = GetKeyButton
+
+local GetKeyIcon = Instance.new("ImageLabel")
+GetKeyIcon.Name = "Icon"
+GetKeyIcon.Size = UDim2.fromOffset(18, 18)
+GetKeyIcon.Position = UDim2.new(0.5, -55, 0.5, 0)
+GetKeyIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+GetKeyIcon.BackgroundTransparency = 1
+GetKeyIcon.ImageColor3 = CONFIG.COLORS.TEXT_DIM
+GetKeyIcon.ZIndex = 13
+GetKeyIcon.Parent = GetKeyContent
+
+ApplyIcon(GetKeyIcon, "external-link")
+
+local GetKeyText = Instance.new("TextLabel")
+GetKeyText.Name = "Text"
+GetKeyText.Size = UDim2.new(1, -40, 1, 0)
+GetKeyText.Position = UDim2.new(0.5, 5, 0, 0)
+GetKeyText.AnchorPoint = Vector2.new(0.5, 0)
+GetKeyText.BackgroundTransparency = 1
+GetKeyText.Text = "GET KEY LINK"
+GetKeyText.TextColor3 = CONFIG.COLORS.TEXT_DIM
+GetKeyText.TextSize = 13
+GetKeyText.Font = Enum.Font.GothamBold
+GetKeyText.ZIndex = 13
+GetKeyText.Parent = GetKeyContent
+
+local Underline = Instance.new("Frame")
+Underline.Name = "Underline"
+Underline.Size = UDim2.new(0, 0, 0, 2)
+Underline.Position = UDim2.new(0.5, 0, 1, -8)
+Underline.AnchorPoint = Vector2.new(0.5, 0)
+Underline.BackgroundColor3 = CONFIG.COLORS.PRIMARY
+Underline.BorderSizePixel = 0
+Underline.ZIndex = 13
+Underline.Parent = GetKeyButton
+CreateCorner(Underline, UDim.new(1, 0))
+
+GetKeyButton.MouseEnter:Connect(function()
+    Tween(Underline, {Size = UDim2.new(0.5, 0, 0, 2)}, 0.3)
+    Tween(GetKeyText, {TextColor3 = CONFIG.COLORS.TEXT}, 0.2)
+    Tween(GetKeyIcon, {ImageColor3 = CONFIG.COLORS.PRIMARY}, 0.2)
+end)
+
+GetKeyButton.MouseLeave:Connect(function()
+    Tween(Underline, {Size = UDim2.new(0, 0, 0, 2)}, 0.3)
+    Tween(GetKeyText, {TextColor3 = CONFIG.COLORS.TEXT_DIM}, 0.2)
+    Tween(GetKeyIcon, {ImageColor3 = CONFIG.COLORS.TEXT_DIM}, 0.2)
+end)
+
+local RememberSection = Instance.new("Frame")
+RememberSection.Name = "RememberSection"
+RememberSection.Size = UDim2.new(0.85, 0, 0, 40)
+RememberSection.Position = UDim2.new(0.5, 0, 0, 440)
+RememberSection.AnchorPoint = Vector2.new(0.5, 0)
+RememberSection.BackgroundTransparency = 1
+RememberSection.ZIndex = 11
+RememberSection.Parent = Card
+
+local RememberIcon = Instance.new("ImageLabel")
+RememberIcon.Name = "Icon"
+RememberIcon.Size = UDim2.fromOffset(16, 16)
+RememberIcon.Position = UDim2.new(0, 0, 0.5, 0)
+RememberIcon.AnchorPoint = Vector2.new(0, 0.5)
+RememberIcon.BackgroundTransparency = 1
+RememberIcon.ImageColor3 = CONFIG.COLORS.TEXT_DIM
+RememberIcon.ZIndex = 12
+RememberIcon.Parent = RememberSection
+
+ApplyIcon(RememberIcon, "bookmark")
+
+local RememberLabel = Instance.new("TextLabel")
+RememberLabel.Name = "Label"
+RememberLabel.Size = UDim2.new(0.6, 0, 1, 0)
+RememberLabel.Position = UDim2.new(0, 24, 0, 0)
+RememberLabel.BackgroundTransparency = 1
+RememberLabel.Text = "Remember Key"
+RememberLabel.TextColor3 = CONFIG.COLORS.TEXT_DIM
+RememberLabel.TextSize = 13
+RememberLabel.Font = Enum.Font.GothamMedium
+RememberLabel.TextXAlignment = Enum.TextXAlignment.Left
+RememberLabel.ZIndex = 12
+RememberLabel.Parent = RememberSection
+
+local ToggleTrack = Instance.new("Frame")
+ToggleTrack.Name = "ToggleTrack"
+ToggleTrack.Size = UDim2.fromOffset(50, 28)
+ToggleTrack.Position = UDim2.new(1, 0, 0.5, 0)
+ToggleTrack.AnchorPoint = Vector2.new(1, 0.5)
+ToggleTrack.BackgroundColor3 = Color3.fromHex("#2a2a3a")
+ToggleTrack.BorderSizePixel = 0
+ToggleTrack.ZIndex = 12
+ToggleTrack.Parent = RememberSection
+CreateCorner(ToggleTrack, UDim.new(1, 0))
+
+local ToggleKnob = Instance.new("Frame")
+ToggleKnob.Name = "Knob"
+ToggleKnob.Size = UDim2.fromOffset(22, 22)
+ToggleKnob.Position = UDim2.new(0, 3, 0.5, 0)
+ToggleKnob.AnchorPoint = Vector2.new(0, 0.5)
+ToggleKnob.BackgroundColor3 = CONFIG.COLORS.TEXT
+ToggleKnob.BorderSizePixel = 0
+ToggleKnob.ZIndex = 13
+ToggleKnob.Parent = ToggleTrack
+CreateCorner(ToggleKnob, UDim.new(1, 0))
+
+local KnobStroke = CreateStroke(ToggleKnob, Color3.new(0, 0, 0), 1, 0.85)
+
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Name = "ToggleHitbox"
+ToggleButton.Size = UDim2.new(1, 0, 1, 0)
+ToggleButton.BackgroundTransparency = 1
+ToggleButton.Text = ""
+ToggleButton.ZIndex = 14
+ToggleButton.Parent = ToggleTrack
+
+local rememberEnabled = false
+
+ToggleButton.MouseButton1Click:Connect(function()
+    rememberEnabled = not rememberEnabled
+    
+    if rememberEnabled then
+        Tween(ToggleKnob, {Position = UDim2.new(1, -25, 0.5, 0)}, 0.25, Enum.EasingStyle.Back)
+        Tween(ToggleTrack, {BackgroundColor3 = CONFIG.COLORS.PRIMARY}, 0.25)
+        Tween(RememberIcon, {ImageColor3 = CONFIG.COLORS.PRIMARY}, 0.2)
+    else
+        Tween(ToggleKnob, {Position = UDim2.new(0, 3, 0.5, 0)}, 0.25, Enum.EasingStyle.Back)
+        Tween(ToggleTrack, {BackgroundColor3 = Color3.fromHex("#2a2a3a")}, 0.25)
+        Tween(RememberIcon, {ImageColor3 = CONFIG.COLORS.TEXT_DIM}, 0.2)
+        DeleteSavedKey()
+    end
+end)
 
 local VersionLabel = Instance.new("TextLabel")
 VersionLabel.Name = "VersionLabel"
-VersionLabel.Size = UDim2.new(1, 0, 0, 15)
-VersionLabel.Position = UDim2.new(0, 0, 1, -18)
+VersionLabel.Size = UDim2.new(1, 0, 0, 16)
+VersionLabel.Position = UDim2.new(0, 0, 1, -20)
 VersionLabel.BackgroundTransparency = 1
 VersionLabel.Text = CONFIG.VERSION .. " | " .. CONFIG.AUTHOR
-VersionLabel.TextColor3 = Color3.fromHex("#3a3a3a")
+VersionLabel.TextColor3 = Color3.fromHex("#3a3a4a")
 VersionLabel.Font = Enum.Font.Gotham
 VersionLabel.TextSize = 10
 VersionLabel.ZIndex = 11
@@ -691,173 +1167,234 @@ end
 CardContainer.Position = UDim2.fromScale(0.5, 0.55)
 Card.BackgroundTransparency = 1
 CardBorder.Transparency = 1
+InnerGlow.BackgroundTransparency = 1
 LogoRing.BackgroundTransparency = 1
 LogoRingBorder.Transparency = 1
 OuterGlow.BackgroundTransparency = 1
+KeyIcon.ImageTransparency = 1
+WelcomeText.TextTransparency = 1
 TitleLabel.TextTransparency = 1
 SubtitleLabel.TextTransparency = 1
-ProgressFrame.BackgroundTransparency = 1
-ProgressStroke.Transparency = 1
-StatusLabel.TextTransparency = 1
+InputLabel.TextTransparency = 1
+InputContainer.BackgroundTransparency = 1
+InputStroke.Transparency = 1
+InputIcon.ImageTransparency = 1
+KeyInput.TextTransparency = 1
+VerifyButton.BackgroundTransparency = 1
+VerifyStroke.Transparency = 1
+VerifyIcon.ImageTransparency = 1
+VerifyText.TextTransparency = 1
+GetKeyButton.BackgroundTransparency = 1
+GetKeyStroke.Transparency = 1
+GetKeyIcon.ImageTransparency = 1
+GetKeyText.TextTransparency = 1
+RememberSection.Visible = false
 VersionLabel.TextTransparency = 1
-
-if usedLogoIcon then
-    MoonLogoIcon.ImageTransparency = 1
-else
-    if MoonMain then MoonMain.BackgroundTransparency = 1 end
-    if MoonCutout then MoonCutout.BackgroundTransparency = 1 end
-end
+MinimizeButton.BackgroundTransparency = 1
+MinimizeIcon.ImageTransparency = 1
+MinimizeStroke.Transparency = 1
 
 for _, dot in ipairs(DecoDots) do
     dot.BackgroundTransparency = 1
 end
 
-for _, dot in ipairs(spinnerDots) do
-    dot.BackgroundTransparency = 1
-end
-
 task.spawn(function()
-    local rotation = 45
-    while LoaderGui.Parent do
-        rotation = (rotation + 0.1) % 360
-        BGGradient.Rotation = rotation
+    local rotation = 135
+    while KeySystemGui and KeySystemGui.Parent do
+        if not isMinimized then
+            rotation = (rotation + 0.08) % 360
+            BGGradient.Rotation = rotation
+        end
         task.wait(0.03)
     end
 end)
 
 task.spawn(function()
-    while LoaderGui.Parent do
-        CreateFloatingMoon()
-        task.wait(math.random(CONFIG.PARTICLES.MOON_SPAWN_MIN * 100, CONFIG.PARTICLES.MOON_SPAWN_MAX * 100) / 100)
+    while KeySystemGui and KeySystemGui.Parent do
+        CreateFloatingCrystal()
+        task.wait(math.random(CONFIG.PARTICLES.CRYSTAL_SPAWN_MIN * 100, CONFIG.PARTICLES.CRYSTAL_SPAWN_MAX * 100) / 100)
     end
 end)
 
 task.spawn(function()
-    while LoaderGui.Parent do
+    while KeySystemGui and KeySystemGui.Parent do
         CreateStarParticle()
         task.wait(math.random(CONFIG.PARTICLES.STAR_SPAWN_MIN * 100, CONFIG.PARTICLES.STAR_SPAWN_MAX * 100) / 100)
     end
 end)
 
 task.spawn(function()
-    while LoaderGui.Parent do
-        SpinnerContainer.Rotation = SpinnerContainer.Rotation + 6
-        task.wait(0.025)
+    while KeySystemGui and KeySystemGui.Parent do
+        if not isMinimized then
+            Tween(LogoContainer, {Position = UDim2.new(0.5, 0, 0, 48)}, 2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+            task.wait(2)
+            if not KeySystemGui or not KeySystemGui.Parent or isMinimized then break end
+            Tween(LogoContainer, {Position = UDim2.new(0.5, 0, 0, 52)}, 2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+            task.wait(2)
+        else
+            task.wait(0.1)
+        end
     end
 end)
 
 task.spawn(function()
-    while LoaderGui.Parent do
-        Tween(LogoContainer, {Position = UDim2.new(0.5, 0, 0, 38)}, 2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-        task.wait(2)
-        Tween(LogoContainer, {Position = UDim2.new(0.5, 0, 0, 42)}, 2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-        task.wait(2)
-    end
-end)
-
-task.spawn(function()
-    while LoaderGui.Parent do
-        Tween(MoonLogoContainer, {Size = UDim2.fromOffset(43, 43)}, 1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-        task.wait(1.2)
-        Tween(MoonLogoContainer, {Size = UDim2.fromOffset(38, 38)}, 1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-        task.wait(1.2)
+    while KeySystemGui and KeySystemGui.Parent do
+        if not isMinimized then
+            Tween(KeyIconContainer, {Size = UDim2.fromOffset(39, 39)}, 1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+            task.wait(1.2)
+            if not KeySystemGui or not KeySystemGui.Parent or isMinimized then break end
+            Tween(KeyIconContainer, {Size = UDim2.fromOffset(34, 34)}, 1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+            task.wait(1.2)
+        else
+            task.wait(0.1)
+        end
     end
 end)
 
 task.spawn(function()
     local offset = 0
-    while LoaderGui.Parent do
-        offset = (offset + 0.006) % 1
-        TitleGradient.Offset = Vector2.new(offset - 0.5, 0)
+    while KeySystemGui and KeySystemGui.Parent do
+        if not isMinimized then
+            offset = (offset + 0.005) % 1
+            TitleGradient.Offset = Vector2.new(offset - 0.5, 0)
+        end
         task.wait(0.03)
     end
 end)
 
 task.spawn(function()
-    while LoaderGui.Parent do
-        ProgressShine.Position = UDim2.fromScale(-0.25, 0)
-        Tween(ProgressShine, {Position = UDim2.fromScale(1.25, 0)}, 1.5, Enum.EasingStyle.Linear)
-        task.wait(2.2)
-    end
-end)
-
-task.spawn(function()
-    while LoaderGui.Parent do
-        Tween(CardBorder, {Transparency = 0.65}, 1.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-        task.wait(1.8)
-        Tween(CardBorder, {Transparency = 0.3}, 1.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-        task.wait(1.8)
-    end
-end)
-
-task.spawn(function()
-    while LoaderGui.Parent do
-        Tween(OuterGlow, {BackgroundTransparency = 0.85}, 1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-        task.wait(1.5)
-        Tween(OuterGlow, {BackgroundTransparency = 0.95}, 1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-        task.wait(1.5)
-    end
-end)
-
-task.spawn(function()
-    while LoaderGui.Parent do
-        for i, dot in ipairs(DecoDots) do
-            task.delay(i * 0.08, function()
-                Tween(dot, {BackgroundTransparency = 0.3}, 0.4)
-                task.wait(0.4)
-                Tween(dot, {BackgroundTransparency = 0.7}, 0.4)
-            end)
+    while KeySystemGui and KeySystemGui.Parent do
+        if not isMinimized then
+            Tween(CardBorder, {Transparency = 0.6}, 1.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+            task.wait(1.8)
+            if not KeySystemGui or not KeySystemGui.Parent or isMinimized then break end
+            Tween(CardBorder, {Transparency = 0.25}, 1.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+            task.wait(1.8)
+        else
+            task.wait(0.1)
         end
-        task.wait(1.5)
     end
 end)
 
-local function RemoveLoader(success)
-    local successText = success and "Launch Successful!" or "Failed to Load"
-    local color = success and CONFIG.COLORS.SUCCESS or CONFIG.COLORS.ERROR
-    
-    StatusLabel.Text = successText
-    StatusLabel.TextColor3 = color
-    if success then
-        Tween(ProgressFill, {Size = UDim2.fromScale(1, 1)}, 0.3)
+task.spawn(function()
+    while KeySystemGui and KeySystemGui.Parent do
+        if not isMinimized then
+            Tween(OuterGlow, {BackgroundTransparency = 0.82}, 1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+            task.wait(1.5)
+            if not KeySystemGui or not KeySystemGui.Parent or isMinimized then break end
+            Tween(OuterGlow, {BackgroundTransparency = 0.92}, 1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+            task.wait(1.5)
+        else
+            task.wait(0.1)
+        end
+    end
+end)
+
+task.spawn(function()
+    while KeySystemGui and KeySystemGui.Parent do
+        if not isMinimized then
+            for i, dot in ipairs(DecoDots) do
+                task.delay(i * 0.08, function()
+                    if not KeySystemGui or not KeySystemGui.Parent or isMinimized then return end
+                    Tween(dot, {BackgroundTransparency = 0.25}, 0.4)
+                    task.wait(0.4)
+                    if not KeySystemGui or not KeySystemGui.Parent or isMinimized then return end
+                    Tween(dot, {BackgroundTransparency = 0.65}, 0.4)
+                end)
+            end
+            task.wait(1.5)
+        else
+            task.wait(0.1)
+        end
+    end
+end)
+
+local function ShakeCard()
+    local originalPos = CardContainer.Position
+    for i = 1, 6 do
+        CardContainer.Position = UDim2.new(0.5, math.random(-10, 10), 0.5, math.random(-4, 4))
+        task.wait(0.04)
+    end
+    Tween(CardContainer, {Position = originalPos}, 0.15)
+end
+
+local function ExecuteScript(url)
+    if url and url ~= "" then
+        task.spawn(function()
+            local success, err = pcall(function()
+                loadstring(game:HttpGet(url))()
+            end)
+        end)
+    end
+end
+
+local function SuccessClose()
+    for i = 1, 10 do
+        local burst = Instance.new("ImageLabel")
+        burst.Size = UDim2.fromOffset(24, 24)
+        burst.Position = UDim2.fromScale(0.5, 0.3)
+        burst.AnchorPoint = Vector2.new(0.5, 0.5)
+        burst.BackgroundTransparency = 1
+        burst.ImageColor3 = CONFIG.COLORS.SUCCESS
+        burst.ZIndex = 20
+        burst.Parent = Card
+        
+        ApplyIcon(burst, "sparkles")
+        
+        local angle = (i / 10) * math.pi * 2
+        local distance = 140
+        
+        task.spawn(function()
+            Tween(burst, {
+                Position = UDim2.new(0.5, math.cos(angle) * distance, 0.3, math.sin(angle) * distance),
+                ImageTransparency = 1,
+                Rotation = 360
+            }, 0.7)
+            task.wait(0.7)
+            if burst and burst.Parent then burst:Destroy() end
+        end)
     end
     
-    task.wait(0.5)
+    task.wait(0.9)
     
-    local fadeTime = 0.4
+    local fadeTime = 0.45
     
     Tween(CardContainer, {Position = UDim2.fromScale(0.5, 0.45)}, 0.5, Enum.EasingStyle.Back, Enum.EasingDirection.In)
     Tween(Card, {BackgroundTransparency = 1}, fadeTime)
-
+    
     for _, shadow in ipairs(ShadowLayers) do
         Tween(shadow, {BackgroundTransparency = 1}, fadeTime)
     end
     
     Tween(CardBorder, {Transparency = 1}, fadeTime)
+    Tween(InnerGlow, {BackgroundTransparency = 1}, fadeTime)
     Tween(LogoRing, {BackgroundTransparency = 1}, fadeTime)
     Tween(LogoRingBorder, {Transparency = 1}, fadeTime)
     Tween(OuterGlow, {BackgroundTransparency = 1}, fadeTime)
-    
-    if usedLogoIcon then
-        Tween(MoonLogoIcon, {ImageTransparency = 1}, fadeTime)
-    else
-        if MoonMain then Tween(MoonMain, {BackgroundTransparency = 1}, fadeTime) end
-        if MoonCutout then Tween(MoonCutout, {BackgroundTransparency = 1}, fadeTime) end
-    end
-    
+    Tween(KeyIcon, {ImageTransparency = 1}, fadeTime)
+    Tween(WelcomeText, {TextTransparency = 1}, fadeTime)
     Tween(TitleLabel, {TextTransparency = 1}, fadeTime)
     Tween(SubtitleLabel, {TextTransparency = 1}, fadeTime)
+    Tween(InputLabel, {TextTransparency = 1}, fadeTime)
+    Tween(InputContainer, {BackgroundTransparency = 1}, fadeTime)
+    Tween(InputStroke, {Transparency = 1}, fadeTime)
+    Tween(InputIcon, {ImageTransparency = 1}, fadeTime)
+    Tween(KeyInput, {TextTransparency = 1}, fadeTime)
+    Tween(VerifyButton, {BackgroundTransparency = 1}, fadeTime)
+    Tween(VerifyStroke, {Transparency = 1}, fadeTime)
+    Tween(VerifyIcon, {ImageTransparency = 1}, fadeTime)
+    Tween(VerifyText, {TextTransparency = 1}, fadeTime)
+    Tween(GetKeyButton, {BackgroundTransparency = 1}, fadeTime)
+    Tween(GetKeyStroke, {Transparency = 1}, fadeTime)
+    Tween(GetKeyIcon, {ImageTransparency = 1}, fadeTime)
+    Tween(GetKeyText, {TextTransparency = 1}, fadeTime)
     Tween(StatusLabel, {TextTransparency = 1}, fadeTime)
+    Tween(StatusIcon, {ImageTransparency = 1}, fadeTime)
     Tween(VersionLabel, {TextTransparency = 1}, fadeTime)
-    Tween(ProgressFrame, {BackgroundTransparency = 1}, fadeTime)
-    Tween(ProgressFill, {BackgroundTransparency = 1}, fadeTime)
-    Tween(ProgressStroke, {Transparency = 1}, fadeTime)
+    Tween(MinimizeButton, {BackgroundTransparency = 1}, fadeTime)
+    Tween(MinimizeIcon, {ImageTransparency = 1}, fadeTime)
     
     for _, dot in ipairs(DecoDots) do
-        Tween(dot, {BackgroundTransparency = 1}, fadeTime)
-    end
-    
-    for _, dot in ipairs(spinnerDots) do
         Tween(dot, {BackgroundTransparency = 1}, fadeTime)
     end
     
@@ -867,44 +1404,380 @@ local function RemoveLoader(success)
     Tween(Background, {BackgroundTransparency = 1}, 0.5)
     Tween(Vignette, {ImageTransparency = 1}, 0.5)
     
-    for _, moonBG in ipairs(bgMoons) do
-        for _, child in ipairs(moonBG:GetChildren()) do
-            if child:IsA("ImageLabel") then
-                Tween(child, {ImageTransparency = 1}, 0.4)
-            elseif child:IsA("Frame") then
-                Tween(child, {BackgroundTransparency = 1}, 0.4)
+    for _, crystal in ipairs(bgCrystals) do
+        if crystal and crystal.Parent then
+            for _, child in ipairs(crystal:GetChildren()) do
+                if child:IsA("ImageLabel") then
+                    Tween(child, {ImageTransparency = 1}, 0.4)
+                end
             end
         end
     end
     
     task.wait(0.6)
-    LoaderGui:Destroy()
+    
+    local scriptUrl = CONFIG.SCRIPT_URL
+    
+    if KeySystemGui and KeySystemGui.Parent then
+        KeySystemGui:Destroy()
+    end
+    
+    task.wait(0.2)
+    
+    ExecuteScript(scriptUrl)
 end
 
-task.spawn(function()
-    Tween(CardContainer, {Position = UDim2.fromScale(0.5, 0.5)}, 1, Enum.EasingStyle.Back)
-    Tween(Card, {BackgroundTransparency = 0.03}, 0.8)
+local function CheckHWIDBan()
+    if not JUNKIE_CONFIG.ENABLE_HWID_CHECK then
+        return false, nil
+    end
+    
+    local hwid = GetHWID()
+    
+    if JunkieSDK then
+        local checkFunc = JunkieSDK.IsHwidBanned or JunkieSDK.isHwidBanned
+        if checkFunc then
+            local success, result = pcall(function()
+                return checkFunc(JUNKIE_CONFIG.API_KEY, hwid, JUNKIE_CONFIG.SERVICE_ID)
+            end)
+            
+            if success and result then
+                if type(result) == "table" and result.is_banned then
+                    return true, result.ban_reason or "No reason provided"
+                elseif result == true then
+                    return true, "HWID Banned"
+                end
+            end
+        end
+    end
+    
+    return false, nil
+end
 
+local function CheckKeylessMode()
+    if not JUNKIE_CONFIG.ENABLE_KEYLESS_CHECK then
+        return false
+    end
+    
+    if JunkieSDK and JunkieSDK.isKeylessMode then
+        local success, result = pcall(function()
+            return JunkieSDK.isKeylessMode(
+                JUNKIE_CONFIG.API_KEY,
+                JUNKIE_CONFIG.SERVICE_ID
+            )
+        end)
+        
+        if success then
+            if type(result) == "boolean" then
+                return result
+            elseif type(result) == "table" then
+                return result.keyless_mode or result.keyless or result.enabled or false
+            elseif type(result) == "string" then
+                return result == "true" or result == "enabled"
+            end
+        end
+    end
+    
+    return false
+end
+
+local function GetKeyLink()
+    if JunkieSDK and JunkieSDK.getLink then
+        local success, link = pcall(function()
+            return JunkieSDK.getLink(
+                JUNKIE_CONFIG.API_KEY,
+                JUNKIE_CONFIG.PROVIDER,
+                JUNKIE_CONFIG.SERVICE_ID
+            )
+        end)
+        
+        if success and link and link ~= "" then
+            return link
+        end
+    end
+    
+    return nil
+end
+
+local function ValidateKeyAPI(key)
+    if not JunkieSDK or not JunkieSDK.verifyKey then
+        return false
+    end
+    
+    local success, result = pcall(function()
+        return JunkieSDK.verifyKey(
+            JUNKIE_CONFIG.API_KEY,
+            key,
+            JUNKIE_CONFIG.SERVICE_ID
+        )
+    end)
+    
+    if success then
+        if type(result) == "boolean" then
+            return result
+        elseif type(result) == "string" then
+            return result == "valid" or result == "true"
+        elseif type(result) == "table" then
+            return result.valid == true or result.success == true
+        end
+    end
+    
+    return false
+end
+
+local function CheckPremiumStatus()
+    return false
+end
+
+local function GetKeyExpiration()
+    return nil
+end
+
+local function VerifyKey(key, isAutoVerify)
+    if key == "" then
+        if not isAutoVerify then
+            ShowStatus("Please enter a key!", CONFIG.COLORS.WARNING, 2.5, "alert-triangle")
+            ShakeCard()
+        end
+        return
+    end
+    
+    ShowStatus("Verifying key...", CONFIG.COLORS.ACCENT, nil, "loader-2")
+    VerifyText.Text = "VERIFYING..."
+    ApplyIcon(VerifyIcon, "loader-2")
+    
+    task.wait(0.8)
+    
+    if JUNKIE_CONFIG.ENABLE_HWID_CHECK then
+        ShowStatus("Checking HWID...", CONFIG.COLORS.ACCENT, nil, "fingerprint")
+        task.wait(0.3)
+        
+        local isBanned, banReason = CheckHWIDBan()
+        if isBanned then
+            ShowStatus("Hardware Banned: " .. banReason, CONFIG.COLORS.ERROR, 5, "ban")
+            VerifyText.Text = "BANNED"
+            ApplyIcon(VerifyIcon, "ban")
+            ShakeCard()
+            
+            VerifyGradient.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, CONFIG.COLORS.ERROR),
+                ColorSequenceKeypoint.new(1, Color3.fromHex("#dc2626"))
+            })
+            
+            task.wait(3)
+            Players.LocalPlayer:Kick("Hardware banned: " .. banReason)
+            return
+        end
+    end
+    
+    ShowStatus("Validating key...", CONFIG.COLORS.ACCENT, nil, "shield")
+    task.wait(0.5)
+    
+    local isValid = ValidateKeyAPI(key)
+    
+    if isValid then
+        local isPremium = CheckPremiumStatus()
+        local expiresAt = GetKeyExpiration()
+        
+        local successMessage = "Access Granted!"
+        local successColor = CONFIG.COLORS.SUCCESS
+        local successIcon = "check-circle"
+        
+        if isPremium then
+            successMessage = "Premium Access Granted!"
+            successColor = CONFIG.COLORS.PREMIUM
+            successIcon = "crown"
+        end
+        
+        if expiresAt then
+            local currentTime = os.time()
+            if currentTime < expiresAt then
+                local timeLeft = expiresAt - currentTime
+                local daysLeft = math.floor(timeLeft / 86400)
+                local hoursLeft = math.floor((timeLeft % 86400) / 3600)
+                
+                if daysLeft > 0 then
+                    successMessage = successMessage .. " (" .. daysLeft .. " days left)"
+                elseif hoursLeft > 0 then
+                    successMessage = successMessage .. " (" .. hoursLeft .. " hours left)"
+                else
+                    successMessage = successMessage .. " (Expires soon!)"
+                end
+            end
+        end
+        
+        ShowStatus(successMessage, successColor, 2.5, successIcon)
+        VerifyText.Text = "SUCCESS"
+        ApplyIcon(VerifyIcon, "check")
+        
+        if isPremium then
+            VerifyGradient.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, CONFIG.COLORS.PREMIUM),
+                ColorSequenceKeypoint.new(1, Color3.fromHex("#f59e0b"))
+            })
+        else
+            VerifyGradient.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, CONFIG.COLORS.SUCCESS),
+                ColorSequenceKeypoint.new(1, Color3.fromHex("#22c55e"))
+            })
+        end
+        
+        if rememberEnabled then
+            pcall(function()
+                writefile("JunkieKey_Saved.txt", key)
+            end)
+        end
+        
+        task.wait(2)
+        
+        SuccessClose()
+        
+    else
+        ShowStatus("Invalid Key!", CONFIG.COLORS.ERROR, 3, "x-circle")
+        VerifyText.Text = "VERIFY KEY"
+        ApplyIcon(VerifyIcon, "shield-check")
+        ShakeCard()
+        
+        VerifyGradient.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, CONFIG.COLORS.ERROR),
+            ColorSequenceKeypoint.new(1, Color3.fromHex("#dc2626"))
+        })
+        
+        task.wait(0.35)
+        
+        VerifyGradient.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, CONFIG.COLORS.SECONDARY),
+            ColorSequenceKeypoint.new(1, CONFIG.COLORS.PRIMARY)
+        })
+    end
+end
+
+VerifyButton.MouseButton1Click:Connect(function()
+    VerifyKey(KeyInput.Text, false)
+end)
+
+GetKeyButton.MouseButton1Click:Connect(function()
+    ShowStatus("Generating key link...", CONFIG.COLORS.ACCENT, nil, "link")
+    
+    task.spawn(function()
+        local link = GetKeyLink()
+        
+        if link then
+            local copied = false
+            pcall(function()
+                setclipboard(link)
+                copied = true
+            end)
+            
+            if copied then
+                ShowStatus("Key link copied to clipboard!", CONFIG.COLORS.SUCCESS, 3, "clipboard-check")
+            else
+                ShowStatus("Link: " .. link, CONFIG.COLORS.ACCENT, 8, "link")
+            end
+        else
+            ShowStatus("Failed to generate link. Try again!", CONFIG.COLORS.ERROR, 3, "alert-circle")
+        end
+    end)
+end)
+
+KeyInput.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        VerifyKey(KeyInput.Text, false)
+    end
+end)
+
+local savedKeyLoaded = false
+local savedKeyValue = nil
+
+pcall(function()
+    if isfile and isfile("JunkieKey_Saved.txt") then
+        local savedKey = readfile("JunkieKey_Saved.txt")
+        if savedKey and savedKey ~= "" then
+            KeyInput.Text = savedKey
+            savedKeyValue = savedKey
+            savedKeyLoaded = true
+            rememberEnabled = true
+            ToggleKnob.Position = UDim2.new(1, -25, 0.5, 0)
+            ToggleTrack.BackgroundColor3 = CONFIG.COLORS.PRIMARY
+            RememberIcon.ImageColor3 = CONFIG.COLORS.PRIMARY
+        end
+    end
+end)
+
+task.spawn(function()
+    ShowStatus("Loading SDK...", CONFIG.COLORS.ACCENT, nil, "download")
+    local sdkLoaded = LoadJunkieSDK()
+    
+    if not sdkLoaded then
+        ShowStatus("SDK failed to load", CONFIG.COLORS.WARNING, 4, "alert-triangle")
+        task.wait(2)
+        HideStatus()
+        return
+    end
+    
+    if JUNKIE_CONFIG.ENABLE_KEYLESS_CHECK then
+        task.wait(0.3)
+        ShowStatus("Checking keyless mode...", CONFIG.COLORS.ACCENT, nil, "unlock")
+        
+        local isKeyless = CheckKeylessMode()
+        if isKeyless then
+            ShowStatus("Keyless mode enabled!", CONFIG.COLORS.SUCCESS, 2, "sparkles")
+            task.wait(2)
+            SuccessClose()
+            return
+        end
+    end
+    
+    if JUNKIE_CONFIG.ENABLE_HWID_CHECK then
+        task.wait(0.3)
+        ShowStatus("Checking HWID status...", CONFIG.COLORS.ACCENT, nil, "fingerprint")
+        
+        local isBanned, banReason = CheckHWIDBan()
+        if isBanned then
+            ShowStatus("Hardware Banned!", CONFIG.COLORS.ERROR, nil, "ban")
+            task.wait(2)
+            Players.LocalPlayer:Kick("Hardware banned: " .. (banReason or "No reason provided"))
+            return
+        end
+    end
+    
+    task.wait(0.5)
+    
+    if savedKeyLoaded and savedKeyValue and savedKeyValue ~= "" then
+        ShowStatus("Auto-verifying saved key...", CONFIG.COLORS.ACCENT, nil, "key")
+        task.wait(0.5)
+        VerifyKey(savedKeyValue, true)
+    else
+        HideStatus()
+    end
+end)
+
+task.spawn(function()
+    task.wait(0.2)
+    
+    Tween(CardContainer, {Position = UDim2.fromScale(0.5, 0.5)}, 0.9, Enum.EasingStyle.Back)
+    Tween(Card, {BackgroundTransparency = 0.02}, 0.7)
+    
     for i, shadow in ipairs(ShadowLayers) do
-        local targetTransparency = shadow.Name == "CardShadow1" and 0.85 or (shadow.Name == "CardShadow2" and 0.75 or 0.65)
+        local targetTransparency = shadow.Name == "CardShadow1" and 0.82 or (shadow.Name == "CardShadow2" and 0.72 or 0.62)
         task.delay(i * 0.05, function()
-            Tween(shadow, {BackgroundTransparency = targetTransparency}, 0.8)
+            Tween(shadow, {BackgroundTransparency = targetTransparency}, 0.7)
         end)
     end
     
-    Tween(CardBorder, {Transparency = 0.45}, 0.8)
+    Tween(CardBorder, {Transparency = 0.4}, 0.7)
+    Tween(InnerGlow, {BackgroundTransparency = 0.92}, 0.7)
     
     task.wait(0.1)
-    Tween(LogoRing, {BackgroundTransparency = 0.3}, 0.5)
-    Tween(LogoRingBorder, {Transparency = 0.2}, 0.5)
-    Tween(OuterGlow, {BackgroundTransparency = 0.9}, 0.5)
     
-    if usedLogoIcon then
-        Tween(MoonLogoIcon, {ImageTransparency = 0}, 0.6)
-    else
-        if MoonMain then Tween(MoonMain, {BackgroundTransparency = 0}, 0.6) end
-        if MoonCutout then Tween(MoonCutout, {BackgroundTransparency = 0}, 0.6) end
-    end
+    Tween(LogoRing, {BackgroundTransparency = 0.2}, 0.5)
+    Tween(LogoRingBorder, {Transparency = 0.15}, 0.5)
+    Tween(OuterGlow, {BackgroundTransparency = 0.88}, 0.5)
+    Tween(KeyIcon, {ImageTransparency = 0}, 0.6)
+    
+    Tween(MinimizeButton, {BackgroundTransparency = 0.3}, 0.5)
+    Tween(MinimizeIcon, {ImageTransparency = 0}, 0.5)
+    Tween(MinimizeStroke, {Transparency = 0.7}, 0.5)
     
     for i, dot in ipairs(DecoDots) do
         task.delay(i * 0.05, function()
@@ -912,58 +1785,37 @@ task.spawn(function()
         end)
     end
     
-    task.wait(0.2)
+    task.wait(0.15)
+    
+    Tween(WelcomeText, {TextTransparency = 0}, 0.5)
     Tween(TitleLabel, {TextTransparency = 0}, 0.6)
     Tween(SubtitleLabel, {TextTransparency = 0}, 0.5)
-    Tween(ProgressFrame, {BackgroundTransparency = 0}, 0.5)
-    Tween(ProgressStroke, {Transparency = 0.85}, 0.5)
-    Tween(StatusLabel, {TextTransparency = 0}, 0.5)
     
-    for i, dot in ipairs(spinnerDots) do
-        task.delay(i * 0.04, function()
-            local targetTransparency = (i - 1) / #spinnerDots * 0.9
-            Tween(dot, {BackgroundTransparency = targetTransparency}, 0.35)
-        end)
-    end
+    task.wait(0.1)
+    
+    Tween(InputLabel, {TextTransparency = 0}, 0.5)
+    Tween(InputContainer, {BackgroundTransparency = 0}, 0.5)
+    Tween(InputStroke, {Transparency = 0.3}, 0.5)
+    Tween(InputIcon, {ImageTransparency = 0.3}, 0.5)
+    Tween(KeyInput, {TextTransparency = 0}, 0.5)
+    
+    task.wait(0.1)
+    
+    Tween(VerifyButton, {BackgroundTransparency = 0}, 0.5)
+    Tween(VerifyStroke, {Transparency = 0.7}, 0.5)
+    Tween(VerifyIcon, {ImageTransparency = 0}, 0.5)
+    Tween(VerifyText, {TextTransparency = 0}, 0.5)
+    
+    task.wait(0.08)
+    
+    Tween(GetKeyButton, {BackgroundTransparency = 0}, 0.5)
+    Tween(GetKeyStroke, {Transparency = 0.7}, 0.5)
+    Tween(GetKeyIcon, {ImageTransparency = 0}, 0.5)
+    Tween(GetKeyText, {TextTransparency = 0}, 0.5)
+    
+    task.wait(0.1)
+    
+    RememberSection.Visible = true
     
     Tween(VersionLabel, {TextTransparency = 0}, 0.5)
-    
-    task.wait(0.5) 
-    
-    LoadingState.currentStatus = "Connecting..."
-    Tween(ProgressFill, {Size = UDim2.fromScale(0.3, 1)}, 0.5)
-    
-    local scriptContent = nil
-    local fetchSuccess, fetchError = pcall(function()
-        scriptContent = game:HttpGet(CONFIG.SCRIPT_URL)
-    end)
-    
-    if not fetchSuccess or not scriptContent then
-        LoadingState.currentStatus = "Connection Failed"
-        RemoveLoader(false)
-        warn("Loader Error:", fetchError)
-        return
-    end
-    
-    LoadingState.currentStatus = "Executing..."
-    Tween(ProgressFill, {Size = UDim2.fromScale(0.8, 1)}, 0.3)
-    
-    local compiledFunc, compileError = loadstring(scriptContent)
-    
-    if not compiledFunc then
-        LoadingState.currentStatus = "Compile Error"
-        RemoveLoader(false)
-        warn("Loader Compile Error:", compileError)
-        return
-    end
-    
-    local executeSuccess, executeError = pcall(compiledFunc)
-    
-    if executeSuccess then
-        RemoveLoader(true)
-    else
-        LoadingState.currentStatus = "Runtime Error"
-        RemoveLoader(false)
-        warn("Loader Runtime Error:", executeError)
-    end
 end)
